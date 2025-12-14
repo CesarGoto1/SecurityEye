@@ -75,7 +75,7 @@ def startup():
             "port": int(os.getenv("DB_PORT", "5432")),
             "database": os.getenv("DB_NAME", "pry_lectura1"),
             "user": os.getenv("DB_USER", "postgres"),
-            "password": os.getenv("DB_PASS", "123"),
+            "password": os.getenv("DB_PASS", "admin"),
         }
         app.state.db_pool = pool.SimpleConnectionPool(1, 10, **db_config)
         log.info("Conexión a base de datos establecida.")
@@ -294,7 +294,7 @@ async def save_fatigue(data: FatigueResult):
 
         # --- Llamada a N8N para diagnóstico ---
         try:
-            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/fatigue")
+            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://cagonzalez12.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
             if n8n_webhook_url:
                 payload_to_n8n = {
                     "usuario_id": data.usuario_id,
