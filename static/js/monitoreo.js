@@ -44,6 +44,7 @@ let currentResourceName = null;
 // Constantes y umbrales
 const CALIBRATION_DURATION = 10;
 const ALERT_COOLDOWN = 30;
+const METRIC_PUSH_INTERVAL = 5;
 let calibrationEARs = [];
 let calibrationMARs = [];
 let baselineEAR = 0;
@@ -51,6 +52,7 @@ let baselineMAR = 0;
 let thresClose = 0.20;
 let thresOpen = 0.25;
 let thresYawn = 0.50;
+let metricsLastSent = 0;
 
 // Métricas de seguimiento
 let blinkCounter = 0;
@@ -267,8 +269,10 @@ faceMesh.onResults((results) => {
             perclosEl.textContent = parseFloat(perclos.toFixed(1)) + '%';
 
             // -------------------------
-            // DETECCIÓN DE FATIGA EN TIEMPO REAL
+            // DETECCIÓN DE FATIGA (alineada con medicion.js)
             // -------------------------
+            const blinkRateMin = elapsed > 0 ? (blinkCounter / (elapsed / 60)) : 0;
+
             const pctIncompletos = blinkCounter > 0
                 ? (incompleteBlinks / blinkCounter) * 100
                 : 0;
@@ -279,12 +283,11 @@ faceMesh.onResults((results) => {
 
             let nivelFatiga = 0;
             if (perclos >= 28) nivelFatiga += 3;
-            if (blinkCounter <= 5 && measureFramesTotal > 60) nivelFatiga += 3;
+            if (blinkRateMin <= 5) nivelFatiga += 3;
             if (pctIncompletos >= 20) nivelFatiga += 2;
             if (yawnCounter >= 1) nivelFatiga += 1;
             if (avgVelocity < 0.02) nivelFatiga += 1;
             if (accumulatedClosureTime >= 3) nivelFatiga += 1;
-            if (maxSinParpadeo >= 10) nivelFatiga += 2;
 
             // Mostrar alerta de fatiga (con cooldown)
             if (nivelFatiga >= 3 && (now - lastAlertTime) > ALERT_COOLDOWN) {
@@ -299,13 +302,20 @@ faceMesh.onResults((results) => {
                     reason: nivelFatiga >= 5 ? 'Fatiga severa' : 'Fatiga moderada'
                 });
 
-                // Abrir modal para actividad de descanso
-                abrirModalDescanso();
             }
 
             // -------------------------
             // GUARDAR MÉTRICAS CADA 5 SEGUNDOS
             // -------------------------
+            if ((elapsed - metricsLastSent) >= METRIC_PUSH_INTERVAL) {
+                metricsLastSent = elapsed;
+                guardarMetricasContinuas({
+                    tiempoTranscurrido: elapsed,
+                    perclos,
+                    blinkRateMin,
+                    avgVelocity
+                });
+            }
         }
     }
 
@@ -335,6 +345,7 @@ function startCamera() {
         appState = 'CALIBRATING';
         startTime = performance.now() / 1000;
         lastFrameTime = startTime;
+        metricsLastSent = 0;
 
         calibrationEARs = [];
         calibrationMARs = [];
@@ -366,14 +377,15 @@ async function crearSesion() {
     console.log('Usando sesión existente con ID:', sesionId);
 }
 
-async function guardarMetricasContinuas(tiempoTranscurrido, perclos, blinkRate, velocidadOcular) {
+async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRateMin, avgVelocity }) {
     if (!sesionId) return;
 
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const activityType = currentActivityType;
 
     // Calcular % de parpadeos incompletos
-    const pctIncompletos = blinkRate > 0 ? (incompleteBlinks / blinkRate) * 100 : 0;
+    const sebr = blinkCounter;
+    const pctIncompletos = sebr > 0 ? (incompleteBlinks / sebr) * 100 : 0;
     
     // Detectar fatiga (basado en PERCLOS y alertas)
     const esFatiga = perclos >= 15 || alertasCount >= 2;
@@ -384,12 +396,12 @@ async function guardarMetricasContinuas(tiempoTranscurrido, perclos, blinkRate, 
         actividad: activityType,
         tiempo_total_seg: Math.round(tiempoTranscurrido),
         perclos: parseFloat(perclos.toFixed(2)),
-        sebr: blinkRate,
-        blink_rate_min: blinkRate > 0 ? parseFloat((blinkRate / (tiempoTranscurrido / 60)).toFixed(2)) : 0,
+        sebr,
+        blink_rate_min: parseFloat(blinkRateMin.toFixed(2)),
         pct_incompletos: parseFloat(pctIncompletos.toFixed(2)),
         num_bostezos: yawnCounter,
         tiempo_cierre: parseFloat(accumulatedClosureTime.toFixed(2)),
-        velocidad_ocular: parseFloat(velocidadOcular.toFixed(4)),
+        velocidad_ocular: parseFloat(avgVelocity.toFixed(4)),
         max_sin_parpadeo: Math.round(maxSinParpadeo),
         alertas: alertasCount,
         momentos_fatiga: momentosFatiga,
@@ -398,7 +410,7 @@ async function guardarMetricasContinuas(tiempoTranscurrido, perclos, blinkRate, 
     };
 
     try {
-        const response = await fetch('http://localhost:8000/save-fatigue', {
+        const response = await fetch(`${API_BASE}/save-fatigue`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -435,6 +447,8 @@ function mostrarModalKSS() {
             const activityType = currentActivityType;
             const tiempoTotal = Math.round((performance.now() / 1000) - startTime - (CALIBRATION_DURATION));
 
+            const blinkRateMinFinal = tiempoTotal > 0 ? (blinkCounter / (tiempoTotal / 60)) : 0;
+
             const perclos = measureFramesTotal > 0
                 ? (measureFramesClosed / measureFramesTotal) * 100
                 : 0;
@@ -457,7 +471,7 @@ function mostrarModalKSS() {
                 tiempo_total_seg: tiempoTotal,
                 perclos: parseFloat(perclos.toFixed(2)),
                 sebr: blinkCounter,
-                blink_rate_min: blinkCounter > 0 ? parseFloat((blinkCounter / (tiempoTotal / 60)).toFixed(2)) : 0,
+                blink_rate_min: parseFloat(blinkRateMinFinal.toFixed(2)),
                 pct_incompletos: parseFloat(pctIncompletos.toFixed(2)),
                 num_bostezos: yawnCounter,
                 tiempo_cierre: parseFloat(accumulatedClosureTime.toFixed(2)),
@@ -472,7 +486,7 @@ function mostrarModalKSS() {
             console.log('Payload final:', payload);
 
             try {
-                const response = await fetch('http://localhost:8000/save-fatigue', {
+                const response = await fetch(`${API_BASE}/save-fatigue`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -503,11 +517,17 @@ function mostrarAlertaFatiga() {
 }
 
 async function abrirModalDescanso() {
+    const modalEl = document.getElementById('breakActivityModal');
+    if (!modalEl) {
+        console.log('Modal de descanso no disponible; se omite.');
+        return;
+    }
     try {
         const response = await fetch('http://localhost:8000/actividades-descanso');
         const data = await response.json();
 
         const container = document.getElementById('breakActivitiesContainer');
+        if (!container) return;
         container.innerHTML = '';
 
         data.actividades.forEach(act => {
@@ -518,7 +538,7 @@ async function abrirModalDescanso() {
             container.appendChild(btn);
         });
 
-        const breakModal = new bootstrap.Modal(document.getElementById('breakActivityModal'));
+        const breakModal = new bootstrap.Modal(modalEl);
         breakModal.show();
     } catch (e) {
         console.error('Error cargando actividades:', e);
@@ -551,8 +571,9 @@ async function realizarActividadDescanso(actividad) {
     }
     
     // Cerrar modal
-    const breakModal = bootstrap.Modal.getInstance(document.getElementById('breakActivityModal'));
-    breakModal.hide();
+    const modalEl = document.getElementById('breakActivityModal');
+    const breakModal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+    if (breakModal) breakModal.hide();
 }
 
 // ==========================================
