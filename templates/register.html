@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Registro - Sistema de Fatiga Visual</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../static/css/auth_shared.css">
+</head>
+<body>
+  <div class="page-bg"></div>
+
+  <header class="navbar navbar-expand-lg topbar w-100 px-lg-3">
+    <div class="container-fluid px-0">
+      <a class="navbar-brand" href="index.html"><span class="brand-dot"></span><span>Sistema de Fatiga Visual</span></a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain" aria-controls="navMain" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navMain">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item"><a class="nav-link" href="index.html#hero">Inicio</a></li>
+        </ul>
+        <div class="d-flex gap-2">
+          <button class="nav-btn" onclick="location.href='login.html'">Login</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container py-4 py-lg-5">
+    <div class="row g-4 align-items-center justify-content-center hero-row">
+      <div class="col-lg-5">
+        <section class="hero-card h-100">
+          <div class="badge-soft">Sistema de fatiga visual</div>
+          <h1 class="mt-3 mb-2" style="font-size:2rem;letter-spacing:-0.02em;">Crea tu cuenta</h1>
+          <p class="mb-0">Configura tu perfil para acceder a las actividades y diagnósticos de fatiga visual. Tu rol se asignará al ingresar.</p>
+        </section>
+      </div>
+      <div class="col-lg-5">
+        <section class="auth-card h-100">
+          <form onsubmit="return false;" class="d-flex flex-column gap-3">
+            <div>
+              <h2 class="mb-1">Registro</h2>
+              <p class="text-muted mb-0">Completa los datos para comenzar.</p>
+            </div>
+
+            <div>
+              <label for="nombre" class="form-label">Nombre</label>
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-end-0" style="border-radius:12px 0 0 12px; border-color:var(--stroke);"><svg width="18" height="18" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm4 7a5 5 0 1 0-8 0h8z"/></svg></span>
+                <input id="nombre" type="text" class="form-control border-start-0" placeholder="Nombre" autocomplete="given-name" aria-label="Nombre">
+              </div>
+            </div>
+
+            <div>
+              <label for="apellido" class="form-label">Apellido</label>
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-end-0" style="border-radius:12px 0 0 12px; border-color:var(--stroke);"><svg width="18" height="18" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm4 7a5 5 0 1 0-8 0h8z"/></svg></span>
+                <input id="apellido" type="text" class="form-control border-start-0" placeholder="Apellido" autocomplete="family-name" aria-label="Apellido">
+              </div>
+            </div>
+
+            <div>
+              <label for="correo" class="form-label">Correo</label>
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-end-0" style="border-radius:12px 0 0 12px; border-color:var(--stroke);"><svg width="18" height="18" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v.217l-8 4.8-8-4.8V4zM0 6.383V12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6.383l-7.555 4.532a1 1 0 0 1-1.11 0L0 6.383z"/></svg></span>
+                <input id="correo" type="email" class="form-control border-start-0" placeholder="correo@ejemplo.com" autocomplete="email" aria-label="Correo">
+              </div>
+            </div>
+
+            <div>
+              <label for="contrasena" class="form-label">Contraseña</label>
+              <div class="input-group">
+                <span class="input-group-text bg-transparent border-end-0" style="border-radius:12px 0 0 12px; border-color:var(--stroke);"><svg width="18" height="18" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 1a3 3 0 0 0-3 3v2H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-1V4a3 3 0 0 0-3-3z"/></svg></span>
+                <input id="contrasena" type="password" class="form-control border-start-0" placeholder="Contraseña" autocomplete="new-password" aria-label="Contraseña">
+              </div>
+              <p class="text-muted small mb-0 mt-1">Mínimo 4 caracteres para continuar.</p>
+            </div>
+
+            <div id="msg" class="text-center" style="min-height:20px;"></div>
+
+            <div class="d-flex gap-2">
+              <button type="button" class="btn-main w-100" onclick="register()">Crear cuenta</button>
+              <button type="button" class="btn-ghost w-100" onclick="location.href='login.html'">Iniciar sesión</button>
+            </div>
+
+            <p class="footer-link text-center mb-0">¿Ya tienes una cuenta? <a href="login.html">Inicia sesión</a></p>
+          </form>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="container pb-3">
+    <div class="footer-simple text-center">© 2025 - Sistema de Monitoreo de Fatiga Visual</div>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    async function register(){
+      const nombre = document.getElementById('nombre').value.trim();
+      const apellido = document.getElementById('apellido').value.trim();
+      const correo = document.getElementById('correo').value.trim();
+      const contrasena = document.getElementById('contrasena').value.trim();
+      const msg = document.getElementById('msg');
+      msg.textContent = "";
+      msg.className = "";
+
+      if(!nombre || !apellido || !correo || !contrasena){
+        msg.textContent = "Todos los campos son obligatorios.";
+        msg.className = "error";
+        return;
+      }
+
+      if(!correo.includes("@") || !correo.includes(".")){
+        msg.textContent = "Ingrese un correo válido.";
+        msg.className = "error";
+        return;
+      }
+
+      if(contrasena.length < 4){
+        msg.textContent = "La contraseña debe tener al menos 4 caracteres.";
+        msg.className = "error";
+        return;
+      }
+
+      try{
+        const resp = await fetch("http://localhost:8000/register", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ nombre, apellido, correo, contrasena })
+        });
+
+        const data = await resp.json();
+
+        if(!resp.ok){
+          msg.textContent = data.detail || "Error en el registro";
+          msg.className = "error";
+          return;
+        }
+
+        msg.textContent = "Cuenta creada con éxito";
+        msg.className = "success";
+
+        setTimeout(() => {
+          location.href = "login.html";
+        }, 900);
+
+      }catch(e){
+        msg.textContent = "Error de conexión con el servidor";
+        msg.className = "error";
+        console.error(e);
+      }
+    }
+  </script>
+
+</body>
+</html>

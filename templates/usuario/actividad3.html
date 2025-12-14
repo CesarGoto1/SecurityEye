@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Actividad: Hidratación Ocular</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<link rel="stylesheet" href="/static/css/usuario_main.css">
+</head>
+<body id="page-actividad3">
+
+<div class="activity-card">
+  <h2>Hidratación Ocular</h2>
+  
+  <div class="animation-stage">
+    <div id="startOverlay" class="start-overlay">
+      <p style="color:#666; margin-bottom: 10px;">Sigue las instrucciones de voz</p>
+      <button class="btn-start-big" onclick="startActivity()">Empezar Terapia</button>
+    </div>
+    
+    <div class="focus-circle state-open" id="focusCircle">👁️</div>
+  </div>
+
+  <div class="instruction-container">
+    <div class="instruction-text" id="dynamicText">Relájate</div>
+    <div class="sub-text" id="subText">Activa el audio para escuchar la guía</div>
+  </div>
+
+  <div class="progress-wrapper" id="progressContainer">
+    <div class="progress">
+      <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+    </div>
+    <div class="timer-text">Repeticiones: <span id="repCount">0</span> / 5</div>
+  </div>
+
+  <button id="finishBtn" onclick="finishActivity()">Siguiente Paso</button>
+</div>
+
+<script>
+  // --- CONFIGURACIÓN ---
+  const REPETICIONES_META = 5;
+  const TIEMPO_CIERRE = 3000;  // 3 seg cerrando suave
+  const TIEMPO_SQUEEZE = 2000; // 2 seg apretando fuerte
+  const TIEMPO_RELAX = 3000;   // 3 seg relajando
+
+  // Elementos
+  const startOverlay = document.getElementById('startOverlay');
+  const progressContainer = document.getElementById('progressContainer');
+  const progressBar = document.getElementById('progressBar');
+  const repCountDisplay = document.getElementById('repCount');
+  const finishBtn = document.getElementById('finishBtn');
+  const circle = document.getElementById('focusCircle');
+  const dynamicText = document.getElementById('dynamicText');
+  const subText = document.getElementById('subText');
+
+  let repeticiones = 0;
+  let synth = window.speechSynthesis;
+  let cicloInterval;
+
+  function startActivity() {
+    // UI Setup
+    startOverlay.style.opacity = '0';
+    setTimeout(() => startOverlay.style.display = 'none', 400);
+    progressContainer.style.display = 'block';
+    
+    // Iniciar el ciclo
+    ejecutarCiclo();
+  }
+
+  function ejecutarCiclo() {
+    if (repeticiones >= REPETICIONES_META) {
+      completarActividad();
+      return;
+    }
+
+    // PASO 1: CERRAR SUAVE
+    actualizarUI("Cierra Suavemente", "Cierra los ojos sin apretar", "state-close", "😌");
+    hablar("Cierra los ojos suavemente");
+
+    setTimeout(() => {
+        // PASO 2: APRETAR (SQUEEZE)
+        actualizarUI("¡APRIETA!", "Aprieta los párpados fuerte", "state-squeeze", "😣");
+        hablar("Aprieta fuerte, ahora");
+        
+        setTimeout(() => {
+            // PASO 3: RELAJAR
+            repeticiones++;
+            actualizarProgreso();
+            actualizarUI("Abre y Relaja", "Parpadea normalmente", "state-open", "✨");
+            hablar("Abre y relaja");
+
+            // Esperar antes del siguiente ciclo
+            if (repeticiones < REPETICIONES_META) {
+                setTimeout(ejecutarCiclo, TIEMPO_RELAX);
+            } else {
+                setTimeout(completarActividad, TIEMPO_RELAX);
+            }
+
+        }, TIEMPO_SQUEEZE); // Fin de squeeze
+
+    }, TIEMPO_CIERRE); // Fin de cierre suave
+  }
+
+  function actualizarUI(titulo, subtitulo, claseCirculo, icono) {
+    dynamicText.innerText = titulo;
+    subText.innerText = subtitulo;
+    circle.className = `focus-circle ${claseCirculo}`;
+    circle.innerText = icono;
+  }
+
+  function actualizarProgreso() {
+    repCountDisplay.innerText = repeticiones;
+    const porcentaje = (repeticiones / REPETICIONES_META) * 100;
+    progressBar.style.width = porcentaje + "%";
+  }
+
+  function completarActividad() {
+    actualizarUI("¡Completado!", "Tus ojos están hidratados", "state-finish", "🎉");
+    hablar("Excelente trabajo. Ejercicio completado.");
+    
+    progressBar.classList.remove('progress-bar-animated');
+    progressBar.classList.add('bg-success');
+    finishBtn.style.display = 'inline-block';
+  }
+
+  function hablar(texto) {
+    if (synth.speaking) synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(texto);
+    utterance.lang = 'es-ES';
+    utterance.rate = 1.0; 
+    synth.speak(utterance);
+  }
+
+  function finishActivity() {
+    // Redirigir a la medición FINAL pasando el parámetro
+    window.location.href = 'medicion_fatiga.html?tipo=final'; 
+}
+</script>
+
+</body>
+</html>

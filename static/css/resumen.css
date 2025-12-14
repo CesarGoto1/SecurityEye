@@ -1,0 +1,183 @@
+/* Resumen Page Styles */
+
+.main-container {
+    padding-top: 30px;
+    padding-bottom: 60px;
+    position: relative;
+    z-index: 1;
+    min-height: calc(100vh - 220px);
+}
+
+/* Summary Stats */
+.card-gradient p-4 {
+    border-radius: 8px;
+}
+
+/* Metrics List */
+.metrics-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: rgba(163, 217, 213, 0.05);
+    border-radius: 6px;
+    border-left: 3px solid #3A7D8E;
+}
+
+.metric-row span:first-child {
+    font-size: 0.95rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.metric-row span.fw-bold {
+    color: #3A7D8E;
+    font-size: 1.1rem;
+}
+
+.metric-row small {
+    font-size: 0.8rem;
+    color: #999;
+    margin-left: 4px;
+}
+
+/* Charts */
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin-top: 12px;
+}
+
+.chart-container canvas {
+    max-width: 100% !important;
+}
+
+/* Timeline */
+.alerts-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.alert-item {
+    padding: 12px;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.2);
+    border-radius: 6px;
+    border-left: 4px solid #ffc107;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.alert-item .time {
+    font-weight: 600;
+    color: #333;
+}
+
+.alert-item .reason {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.no-alerts {
+    padding: 20px;
+    text-align: center;
+    color: #999;
+    font-style: italic;
+}
+
+/* Recommendations */
+#recommendationsList {
+    padding-left: 20px;
+    list-style-type: disc;
+}
+
+#recommendationsList li {
+    margin-bottom: 8px;
+    color: #555;
+    line-height: 1.6;
+}
+
+/* Diagnosis Section */
+#diagnosisSection {
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+#diagnosisContent {
+    line-height: 1.8;
+    color: #555;
+}
+
+#diagnosisContent p {
+    margin-bottom: 12px;
+}
+
+#diagnosisContent strong {
+    color: #3A7D8E;
+}
+
+/* Loading State */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.15em;
+    color: #3A7D8E;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .chart-container {
+        height: 250px;
+    }
+
+    .metric-row {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-container {
+        padding-top: 20px;
+    }
+
+    .metric-row {
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+
+    .chart-container {
+        height: 200px;
+    }
+
+    #recommendationsList li {
+        font-size: 0.9rem;
+    }
+}
+
+/* Utilities */
+.card-gradient {
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85)) !important;
+    border: 1px solid rgba(163, 217, 213, 0.3) !important;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+.btn-primary {
+    transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(58, 125, 142, 0.3);
+}

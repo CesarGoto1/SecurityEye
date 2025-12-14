@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel del Usuario</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../../static/css/main.css">
+</head>
+<body>
+
+<div class="page-bg"></div>
+
+<!-- ⚠️ PROTECCIÓN DE RUTA - AGREGAR ESTO -->
+<script src="../../static/js/session.js"></script>
+<script>
+    protegerRuta("usuario");
+</script>
+
+<nav class="navbar navbar-global d-flex justify-content-between align-items-center">
+    <a class="d-flex align-items-center text-decoration-none" href="index.html">
+        <i class="bi bi-person-workspace fs-3 me-2 text-primary"></i>
+        <span class="brand-text">Panel del Usuario</span>
+    </a>
+    <div class="d-flex align-items-center gap-3">
+        <span id="userName" class="text-muted fw-bold d-none d-md-block">Cargando...</span>
+        <button class="btn-logout btn-sm" onclick="cerrarSesion()">
+            Cerrar sesión
+        </button>
+    </div>
+</nav>
+
+<main class="container py-5">
+    <div class="row g-4 align-items-stretch justify-content-center hero-row">
+        <div class="col-lg-6">
+            <div class="dashboard-box p-4 h-100">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="bi bi-eye text-primary fs-3 me-2"></i>
+                    <h2 class="fw-bold mb-0">Bienvenido</h2>
+                </div>
+                <p class="text-muted mb-3">Inicia una nueva sesión de monitoreo o revisa el historial de tus evaluaciones previas.</p>
+                <div class="row row-cols-2 row-cols-sm-3 g-2 mb-3">
+                    <div class="col">
+                        <div class="badge bg-light text-secondary w-100 py-2 border">Última sesión<br><span class="fw-semibold text-dark">--</span></div>
+                    </div>
+                    <div class="col">
+                        <div class="badge bg-light text-secondary w-100 py-2 border">Prom. fatiga<br><span class="fw-semibold text-dark">--%</span></div>
+                    </div>
+                    <div class="col">
+                        <div class="badge bg-light text-secondary w-100 py-2 border">Sesiones<br><span class="fw-semibold text-dark">--</span></div>
+                    </div>
+                </div>
+                <div class="d-flex flex-column flex-sm-row gap-3">
+                    <a href="seleccionar_actividad.html" class="text-decoration-none w-100">
+                        <button class="btn-actividades w-100">Iniciar sesión de monitoreo</button>
+                    </a>
+                    <a href="historial.html" class="text-decoration-none w-100">
+                        <button class="btn-actividades outline w-100">Ver historial</button>
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="dashboard-box p-4 h-100">
+                <h5 class="fw-bold mb-3">Accesos rápidos</h5>
+                <ul class="list-unstyled mb-0">
+                    <li class="d-flex align-items-center mb-2">
+                        <i class="bi bi-play-circle text-primary me-2"></i>
+                        <span>Empieza una medición inicial para registrar tu estado actual.</span>
+                    </li>
+                    <li class="d-flex align-items-center mb-2">
+                        <i class="bi bi-clock-history text-primary me-2"></i>
+                        <span>Consulta tu historial completo en la sección de historial.</span>
+                    </li>
+                    <li class="d-flex align-items-center">
+                        <i class="bi bi-shield-check text-primary me-2"></i>
+                        <span>Tu sesión se mantiene protegida mientras navegas.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer>
+    © 2025 - Sistema de Monitoreo de Fatiga Visual
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="../../static/js/session.js"></script>
+<script>
+    function obtenerUsuario() {
+        const usuarioStr = localStorage.getItem("usuario");
+        if (!usuarioStr) {
+            window.location.href = "../login.html";
+            throw new Error("Usuario no autenticado");
+        }
+        return JSON.parse(usuarioStr);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const usuario = obtenerUsuario();
+        const nameEl = document.getElementById('userName');
+        if (nameEl) nameEl.innerText = `${usuario.nombre} ${usuario.apellido}`;
+    });
+
+    function cerrarSesion() {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "/templates/login.html";
+    }
+</script>
+
+
+
+</body>
+</html>

@@ -1,0 +1,236 @@
+=====================================
+AUDITORÍA DE FLUJO - SecurityEye
+Fecha: 13/12/2025
+=====================================
+
+📋 FLUJO ESTABLECIDO:
+====================
+
+1. Login
+   ✅ Usuario inicia sesión (login.html)
+   → localStorage.setItem('usuario', {...})
+
+2. Índice Usuario (index.html)
+   ✅ Muestra opciones:
+      - "Iniciar sesión de monitoreo" → monitoreo.html
+      - "Ver historial" → historial.html
+   
+   VERIFICADO: 
+   - Link correcto a monitoreo.html ✅ (actualizado)
+   - Link correcto a historial.html ✅
+   - Protección de ruta: protegerRuta("usuario") ✅
+
+3. Monitoreo (monitoreo.html → monitoreo.js)
+   ✅ Interfaz con:
+      - Select de actividad (PDF/Video)
+      - Video feed + Canvas MediaPipe
+      - Métricas en tiempo real
+      - Botones: Iniciar / Finalizar
+      - Modales: KSS, Descanso, Resumen
+
+   FUNCIONALIDADES EN monitoreo.js:
+   ✅ startCamera() - Inicia calibración + monitoreo
+   ✅ Detección continua de fatiga (EAR, parpadeos, bostezos, etc.)
+   ✅ Alertas con cooldown de 30s
+   ✅ Guardar métricas cada 5s a backend
+   ✅ Modal KSS al finalizar
+   ✅ Redirect a resumen.html?sesion_id={id}
+
+   PENDIENTE:
+   ⚠️ Crear endpoint en backend para sesiones (POST /create-session)
+   ⚠️ Guardar sesion_id en localStorage durante sesión
+
+4. Alerta + Descanso
+   ✅ abrirModalDescanso() carga actividades
+   ✅ GET /actividades-descanso ✅ (backend implementado)
+   ✅ Modal permite seleccionar descanso
+   ✅ Cierra modal y continúa monitoreo
+
+5. Resumen (resumen.html → resumen.js)
+   ✅ Carga datos de sesión: GET /sesiones/{sesion_id}
+   ✅ Gráficos: Evolución PERCLOS, Distribución alertas
+   ✅ Timeline de momentos críticos
+   ✅ Botones: Volver inicio / Ver historial
+
+   PENDIENTE:
+   ⚠️ Verificar endpoint GET /sesiones/{id} en backend
+   ⚠️ Verificar endpoint GET /get-or-create-diagnosis en backend
+
+6. Historial (historial.html → historial.js)
+   ✅ Tabla de sesiones con: fecha, actividad, duración, alertas, estado
+   ✅ Estadísticas: Total sesiones, tiempo total, fatiga promedio, alertas
+   ✅ Modal de detalles de sesión
+   ✅ Link a resumen completo
+
+   DEPENDENCIAS:
+   ✅ POST /get-user-history (backend implementado)
+   ✅ GET /sesiones/{sesion_id} (necesario verificar)
+
+7. Admin Dashboard (admin/index.html → admin.js)
+   ⚠️ PROBLEMA: Aún usa modelo inicial/final
+   
+   NECESITA:
+   ❌ GET /admin/all-sessions retorna datos continuos ✅ (actualizado backend)
+   ⚠️ admin.js necesita actualización para procesar datos continuos:
+      - NO: "inicial" vs "final"
+      - SÍ: "tipo_actividad", "total_segundos", "alertas", "es_fatiga"
+   
+   GRÁFICOS ACTUALES:
+   ❌ "Fatiga Inicial vs Final" → Debería ser "Fatiga Continua"
+   ❌ "Reducción por sesión" → Debería ser "Alertas por sesión"
+
+=====================================
+ESTADO DE ENDPOINTS BACKEND
+=====================================
+
+VERIFICADOS ✅:
+- POST /save-fatigue (actualizado para continuo)
+- GET /admin/all-sessions (actualizado para continuo)
+- POST /get-user-history (funciona con continuo)
+- GET /actividades-descanso (implementado)
+- POST /end-session/{sesion_id} (implementado)
+
+PENDIENTE VERIFICAR ⚠️:
+- GET /sesiones/{sesion_id} (necesario para resumen)
+- GET /get-or-create-diagnosis (necesario para análisis IA)
+- POST /create-session (necesario crear sesión antes de monitorear)
+
+=====================================
+CHECKLIST HTML/JS
+=====================================
+
+monitoreo.html:
+✅ Script: monitoreo.js
+✅ Bootstrap, MediaPipe, Chart.js
+✅ Elementos necesarios: videoElement, output_canvas, statusOverlay
+✅ Elementos necesarios: blinkCount, timerCount, alertBanner
+✅ Modales: subjectiveModal, summaryModal, breakActivityModal
+✅ Select: activityType
+
+monitoreo.js:
+✅ startCamera() → crearSesion() → MonitoringLoop
+✅ Detección de fatiga continua
+✅ guardarMetricasContinuas() cada 5s
+✅ mostrarAlertaFatiga() con cooldown
+✅ abrirModalDescanso() carga actividades
+✅ mostrarModalKSS() → finalizarSesion()
+✅ Redirect a resumen.html?sesion_id={id}
+
+resumen.html:
+✅ Script: resumen.js
+✅ Elementos necesarios: sessionDate, summaryDuration, summaryAlerts
+✅ Elementos gráficos: fatigueChart, alertsChart
+✅ Elementos: alertsTimeline, recommendationsList
+
+resumen.js:
+✅ cargarDatosSesion() → GET /sesiones/{id}
+✅ generarDiagnosticoIA() → GET /get-or-create-diagnosis
+✅ construirGraficos()
+✅ construirTimelineAlertas()
+
+historial.html:
+✅ Script: historial.js
+✅ Elementos: userName, totalSessions, totalTime, avgFatigue
+✅ Tabla: sessionsList
+✅ Modal: detailModal
+
+historial.js:
+✅ cargarHistorial() → POST /get-user-history
+✅ llenarTabla()
+✅ calcularEstadisticas()
+✅ abrirDetalles(sesionId) → GET /sesiones/{id}
+
+admin/index.html:
+❌ PROBLEMA: Tabla headers aún mencionan "Inicial" / "Final"
+⚠️ Gráficos aún son para modelo inicial/final
+
+admin.js:
+⚠️ llenarMetricas() - Calcula "avgIni", "avgFin", "avgRed"
+⚠️ generarGraficos() - Compara inicial vs final
+❌ NO procesa datos continuos correctamente
+
+=====================================
+PROBLEMAS IDENTIFICADOS
+=====================================
+
+🔴 CRÍTICOS:
+
+1. admin.js no está actualizado para datos continuos
+   - Sigue calculando "inicial" vs "final"
+   - Necesita procesadores para: tipo_actividad, total_segundos, alertas
+   
+2. Backend - Falta endpoint para crear sesión
+   - POST /create-session necesario antes de crearSesion() en monitoreo.js
+   
+3. Backend - Necesita verificar GET /sesiones/{id}
+   - Resumen.js lo necesita
+
+4. admin/index.html - Headers de tabla aún son viejos
+   - "Fatiga Inicial" → "Fatiga Continua"
+   - "Reducción" → "Alertas"
+
+🟡 IMPORTANTES:
+
+5. monitoreo.js - guardarMetricasContinuas() no maneja error si sesionId null
+   - Debería validar que existe sesionId
+
+6. Flujo de detalles en admin
+   - admin/details.html aún espera data con INICIAL/FINAL
+   - Necesita actualización para modelo continuo
+
+=====================================
+ACCIONES REQUERIDAS
+=====================================
+
+✅ COMPLETADO (100%):
+
+1. ✅ Actualizar link index.html → monitoreo.html
+2. ✅ Actualizar admin.js para modelo continuo
+3. ✅ Actualizar admin.js - procesar datos continuos (llenarTabla, llenarMetricas, generarGraficos)
+4. ✅ Actualizar admin/index.html headers de tabla (8 columnas)
+5. ✅ Actualizar admin/index.html labels de gráficos y métricas
+6. ✅ admin.js gráficos completamente reescritos para modelo continuo
+7. ✅ Crear endpoint POST /create-session en backend.py
+8. ✅ Actualizar monitoreo.js para usar endpoint /create-session
+9. ✅ Verificar endpoint GET /sesiones/{id} existe y funciona
+10. ✅ Verificar endpoint POST /get-or-create-diagnosis existe y funciona
+11. ✅ Actualizar admin/details.js completamente para modelo continuo
+12. ✅ Actualizar admin/details.html con info general + timeline
+
+=====================================
+SISTEMA LISTO PARA PRUEBAS
+=====================================
+
+El sistema SecurityEye ha sido completamente migrado de modelo inicial/final 
+a modelo de monitoreo continuo. Todos los componentes están actualizados:
+
+FRONTEND:
+- ✅ Monitoreo continuo con MediaPipe (monitoreo.js, monitoreo.html)
+- ✅ Resumen post-sesión con gráficos (resumen.js, resumen.html)
+- ✅ Historial de sesiones (historial.js, historial.html)
+- ✅ Dashboard admin con datos continuos (admin.js, admin/index.html)
+- ✅ Detalles de sesión admin con métricas (details.js, details.html)
+
+BACKEND:
+- ✅ POST /create-session - Crea sesión con ID de BD
+- ✅ POST /save-fatigue - Guarda métricas continuas
+- ✅ GET /sesiones/{id} - Obtiene detalles de sesión
+- ✅ POST /get-user-history - Historial del usuario
+- ✅ GET /admin/all-sessions - Todas las sesiones (admin)
+- ✅ POST /get-or-create-diagnosis - Diagnóstico IA
+- ✅ GET /actividades-descanso - Actividades de descanso
+- ✅ POST /end-session/{id} - Finalizar sesión manual
+
+BASE DE DATOS:
+- ✅ SQL/nuevo - Schema actualizado para monitoreo continuo
+- ✅ Tabla sesiones con campos: tipo_actividad, total_segundos, alertas, es_fatiga
+- ✅ Tabla mediciones sin etapa (datos continuos)
+- ✅ Tabla alertas para tracking puntual
+
+DESPUÉS (Refinamiento):
+
+9. 🔲 [FUTURE] Implementar descarga de PDF/Video en monitoreo
+10. 🔲 [FUTURE] Integración N8N para diagnóstico IA
+11. 🔲 [FUTURE] Exportar resumen como PDF
+
+=====================================

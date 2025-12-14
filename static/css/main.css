@@ -1,0 +1,135 @@
+:root{
+    --azul-header:#4DA3FF;
+    --mint:#A2D9D3;
+    --beige:#FFF4D6;
+    --texto:#1A1A1A;
+    --card:#ffffff;
+    --card-2:#f7fbfa;
+    --stroke:#d9e7e6;
+    --accent:#3A7D8E;
+    --accent-2:#4A8B95;
+    --muted:#4b5563;
+}
+
+
+body{
+    background:#A3D9D5;
+    background-image:
+        radial-gradient(circle at 10% 20%, rgba(255,255,255,0.26) 0, rgba(255,255,255,0) 30%),
+        radial-gradient(circle at 80% 10%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0) 32%),
+        radial-gradient(circle at 20% 80%, rgba(255,255,255,0.15) 0, rgba(255,255,255,0) 30%);
+    font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color:var(--texto);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    overflow-x:hidden;
+}
+
+main{
+    flex:1;
+}
+
+.hero-row{
+    min-height:calc(100vh - 220px);
+    align-content:center;
+}
+
+.page-bg{
+    position:fixed;
+    inset:0;
+    background:radial-gradient(circle at 10% 20%, rgba(255,255,255,0.26) 0, rgba(255,255,255,0) 30%),
+               radial-gradient(circle at 80% 10%, rgba(255,255,255,0.18) 0, rgba(255,255,255,0) 32%),
+               radial-gradient(circle at 20% 80%, rgba(255,255,255,0.15) 0, rgba(255,255,255,0) 30%);
+    opacity:.9;
+    pointer-events:none;
+    z-index:0;
+}
+
+.navbar-global{
+    background:rgba(255,255,255,0.9);
+    border:1px solid var(--stroke);
+    border-radius:0;
+    padding:14px 20px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.08);
+    backdrop-filter:blur(4px);
+    position:relative;
+    z-index:1;
+    margin:0;
+    width:100%;
+}
+
+.navbar-global .brand-icon{
+    font-size:1.6rem;
+    margin-right:8px;
+    color:var(--accent);
+}
+
+.navbar-global .brand-text{
+    font-weight:700;
+    color:var(--texto);
+    letter-spacing:-0.01em;
+}
+
+.btn-logout{
+    background:linear-gradient(120deg,var(--accent),var(--accent-2));
+    border:none;
+    color:white;
+    padding:6px 14px;
+    border-radius:10px;
+    transition:.2s;
+    box-shadow:0 8px 18px rgba(58,125,142,0.25);
+}
+
+.btn-logout:hover{
+    color:white;
+    box-shadow:0 12px 26px rgba(58,125,142,0.35);
+    transform:translateY(-1px);
+}
+
+.card-box, .metric-card, .dashboard-box{
+    background:linear-gradient(150deg,rgba(255,255,255,0.94),rgba(255,255,255,0.86));
+    border-radius:18px;
+    border:1px solid var(--stroke);
+    box-shadow:0 12px 28px rgba(0,0,0,0.12);
+}
+
+.metric-card{
+    padding:25px;
+    min-height:140px;
+}
+
+.dashboard-box{
+    padding:20px;
+}
+
+.center-container {
+    display: flex;
+    justify-content: center; /* Centra horizontalmente */
+    align-items: center;     /* Centra verticalmente si el contenedor tiene altura */
+    width: 100%;             /* Ocupa todo el ancho disponible */
+    margin-top: 30px;        /* Espacio arriba para separarlo de la tabla */
+    margin-bottom: 30px;     /* Espacio abajo */
+}
+
+/* 2. Estilo del Botón */
+.btn-actividades {
+    background-color: #3A7D8E; /* Tu color teal del proyecto */
+    color: white;
+    font-size: 1.2rem;
+    font-weight: 600;
+    padding: 12px 40px;      /* Más relleno para que se vea grande */
+    border: none;
+    border-radius: 50px;     /* Bordes redondeados */
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(58, 125, 142, 0.3); /* Sombra suave */
+    transition: all 0.3s ease;
+}
+
+/* Efecto Hover (al pasar el mouse) */
+.btn-actividades:hover {
+    background-color: #2a5d6b; /* Un poco más oscuro */
+    transform: translateY(-3px); /* Se eleva un poco */
+    box-shadow: 0 6px 20px rgba(58, 125, 142, 0.4);
+}

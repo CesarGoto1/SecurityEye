@@ -1,0 +1,151 @@
+/* Historial Page Styles */
+
+.main-container {
+    padding-top: 30px;
+    padding-bottom: 60px;
+    position: relative;
+    z-index: 1;
+    min-height: calc(100vh - 220px);
+}
+
+.card-gradient {
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85)) !important;
+    border: 1px solid rgba(163, 217, 213, 0.3) !important;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+/* Table Styling */
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    background: rgba(163, 217, 213, 0.1);
+    border: 1px solid rgba(163, 217, 213, 0.2);
+    color: #333;
+    font-weight: 600;
+    padding: 12px;
+}
+
+.table td {
+    border: 1px solid rgba(163, 217, 213, 0.1);
+    padding: 12px;
+    vertical-align: middle;
+}
+
+.table tbody tr:hover {
+    background: rgba(163, 217, 213, 0.05);
+}
+
+/* Status Badges */
+.badge {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.badge.bg-success {
+    background: #27ae60 !important;
+}
+
+.badge.bg-warning {
+    background: #f39c12 !important;
+    color: white !important;
+}
+
+.badge.bg-danger {
+    background: #e74c3c !important;
+}
+
+/* Action Buttons */
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.btn-sm:hover {
+    transform: translateY(-1px);
+}
+
+/* Empty State */
+#emptyState {
+    border-radius: 8px;
+    background: rgba(163, 217, 213, 0.05);
+    border: 2px dashed rgba(163, 217, 213, 0.3);
+}
+
+#emptyState i {
+    color: #A3D9D5;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .table {
+        font-size: 0.9rem;
+    }
+
+    .table th,
+    .table td {
+        padding: 10px;
+    }
+
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-container {
+        padding-top: 20px;
+    }
+
+    .table-responsive {
+        font-size: 0.85rem;
+    }
+
+    .table th,
+    .table td {
+        padding: 8px;
+    }
+
+    .table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+
+/* Modal */
+.modal-content {
+    border-radius: 8px;
+    border: 1px solid rgba(163, 217, 213, 0.3);
+}
+
+.modal-header {
+    border-bottom: 1px solid rgba(163, 217, 213, 0.2);
+    background: rgba(163, 217, 213, 0.05);
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+/* Metric Cards in Summary */
+.metric-card {
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(163, 217, 213, 0.2);
+}
+
+.metric-card h3 {
+    color: #3A7D8E;
+}
+
+.metric-card small {
+    color: #666;
+    font-weight: 500;
+}

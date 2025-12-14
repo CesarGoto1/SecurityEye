@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Actividad: Enfoque Profundo</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<link rel="stylesheet" href="/static/css/usuario_main.css">
+</head>
+<body id="page-actividad2">
+
+<div class="activity-card">
+  <h2>Enfoque y Respiración</h2>
+  
+  <div class="animation-stage">
+    <div id="startOverlay" class="start-overlay">
+      <button class="btn-start-big" onclick="startActivity()">Empezar Actividad</button>
+    </div>
+    <div class="guide-dot g-left"></div>
+    <div class="guide-dot g-right"></div>
+    <div class="focus-circle" id="focusCircle"></div>
+  </div>
+
+  <div class="instruction-container">
+    <div class="instruction-text" id="dynamicText">Prepárate</div>
+  </div>
+
+  <div class="progress-wrapper" id="progressContainer">
+    <div class="progress">
+      <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+    </div>
+    <div class="timer-text">Tiempo restante: <span id="timerCount">64</span>s</div>
+  </div>
+
+  <button id="finishBtn" onclick="finishActivity()">Terminar Actividad</button>
+</div>
+
+<script>
+  const CYCLE_DURATION = 8000;
+  const TOTAL_DURATION = 64;
+
+  const startOverlay = document.getElementById('startOverlay');
+  const progressContainer = document.getElementById('progressContainer');
+  const progressBar = document.getElementById('progressBar');
+  const timerCount = document.getElementById('timerCount');
+  const finishBtn = document.getElementById('finishBtn');
+  const circle = document.getElementById('focusCircle');
+  const dynamicText = document.getElementById('dynamicText');
+
+  let timeLeft = TOTAL_DURATION;
+  let timerInterval;
+  let textInterval;
+
+  function startActivity() {
+    startOverlay.style.opacity = '0';
+    setTimeout(() => startOverlay.style.display = 'none', 400);
+    progressContainer.style.display = 'block';
+    dynamicText.style.opacity = '1';
+    
+    circle.classList.add('animating');
+
+    runTextCycle(); 
+    textInterval = setInterval(runTextCycle, CYCLE_DURATION);
+    runTimer();
+  }
+
+  function runTextCycle() {
+    // Fase 1: INHALA
+    dynamicText.textContent = "Inhala... (Enfoca Lejos)";
+    dynamicText.style.color = "#2a5d6b"; 
+
+    // Fase 2: EXHALA
+    setTimeout(() => {
+      if(timeLeft > 0) {
+        dynamicText.textContent = "Exhala... (Enfoca Cerca)";
+        dynamicText.style.color = "#3A7D8E";
+      }
+    }, 4000);
+  }
+
+  function runTimer() {
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      timerCount.textContent = timeLeft;
+      
+      const percentage = ((TOTAL_DURATION - timeLeft) / TOTAL_DURATION) * 100;
+      progressBar.style.width = percentage + "%";
+
+      if (timeLeft <= 0) {
+        completeActivity();
+      }
+    }, 1000);
+  }
+
+  function completeActivity() {
+    clearInterval(timerInterval);
+    clearInterval(textInterval);
+    circle.classList.remove('animating');
+    
+    dynamicText.textContent = "¡Completado!";
+    circle.style.transform = "scale(1)";
+    
+    progressBar.classList.remove('progress-bar-animated');
+    progressBar.classList.add('bg-success');
+    
+    timerCount.textContent = "0 (Completado)";
+    finishBtn.style.display = 'inline-block';
+  }
+
+  function finishActivity() {
+    window.location.href = 'instruccion3.html';
+  }
+</script>
+
+</body>
+</html>
