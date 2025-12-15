@@ -480,6 +480,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
 async function finalizarSesion() {
     stopCamera();
     endSessionBtn.disabled = true;
+    sessionStorage.removeItem('activeMonitoringSession'); // NEW: Clear active session state
     mostrarModalKSS();
 }
 
@@ -530,6 +531,7 @@ function mostrarModalKSS() {
                 });
 
                 if (response.ok) {
+                    sessionStorage.removeItem('activeMonitoringSession'); // NEW: Clear active session state
                     window.location.href = `/usuario/resumen.html?sesion_id=${sesionId}`;
                 } else {
                     alert('Error al guardar la sesión final.');
@@ -607,9 +609,18 @@ async function realizarActividadDescanso(actividad) {
     if (breakModal) breakModal.hide();
 }
 
-// ==========================================
-// 6. EVENT LISTENERS
-// ==========================================
+window.addEventListener('beforeunload', () => {
+    if (sesionId && running && appState === 'MONITORING') { // Only save if actively monitoring
+        const activeSessionState = {
+            sesion_id: sesionId,
+            tipo: currentActivityType,
+            nombre: currentResourceName,
+            url: currentResourceUrl
+        };
+        sessionStorage.setItem('activeMonitoringSession', JSON.stringify(activeSessionState));
+        console.log('Estado de sesión de monitoreo guardado para reanudar.');
+    }
+});
 
 if (startBtn) startBtn.addEventListener('click', startCamera);
 if (endSessionBtn) endSessionBtn.addEventListener('click', finalizarSesion);
@@ -634,10 +645,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const resumeStateJSON = sessionStorage.getItem('resumeState');
+    const activeMonitoringSessionJSON = sessionStorage.getItem('activeMonitoringSession'); // NEW
+
     if (resumeStateJSON) {
-        console.log("Detectado estado para reanudar sesión.");
+        console.log("Detectado estado para reanudar sesión (desde recomendación).");
         const resumeState = JSON.parse(resumeStateJSON);
-        sessionStorage.removeItem('resumeState');
+        sessionStorage.removeItem('resumeState'); // Clear after use
         sesionId = resumeState.sesion_id;
         currentActivityType = resumeState.tipo;
         currentResourceName = resumeState.nombre;
@@ -646,6 +659,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
         cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
         startCamera(true);
+    } else if (activeMonitoringSessionJSON) { // NEW: Check for general active session
+        console.log("Detectado estado para reanudar sesión (previamente activa).");
+        const activeSessionState = JSON.parse(activeMonitoringSessionJSON);
+        // DO NOT remove activeMonitoringSession here, user might navigate again
+        sesionId = activeSessionState.sesion_id;
+        currentActivityType = activeSessionState.tipo;
+        currentResourceName = activeSessionState.nombre;
+        currentResourceUrl = activeSessionState.url;
+        const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
+        if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
+        cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
+        startCamera(true); // Resume camera without creating a new session
     } else {
         console.log("Iniciando nueva sesión desde parámetros de URL.");
         const params = new URLSearchParams(window.location.search);
