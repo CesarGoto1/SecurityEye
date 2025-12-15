@@ -153,8 +153,21 @@
     }
 
     function finishActivity() {
-        // Redirige de vuelta a la página de monitoreo.
-        window.location.href = '/usuario/monitoreo.html';
+        // Redirige de vuelta a la página de monitoreo, pasando los parámetros de la sesión.
+        const params = new URLSearchParams(window.location.search);
+        const sesionId = params.get('sesion_id');
+        const tipo = params.get('tipo');
+        const nombre = params.get('nombre');
+        const url = params.get('url');
+
+        const nextParams = new URLSearchParams();
+        if (sesionId) nextParams.append('sesion_id', sesionId);
+        if (tipo) nextParams.append('tipo', tipo);
+        if (nombre) nextParams.append('nombre', nombre);
+        if (url) nextParams.append('url', url);
+
+        const nextUrl = `/usuario/monitoreo.html?${nextParams.toString()}`;
+        window.location.href = nextUrl;
     }
 </script>
 

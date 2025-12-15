@@ -481,7 +481,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
 
                     const instruccionId = diagnosis.instruccion_sugerida;
                     // Preparamos la URL de redirección
-                    pendingRedirectUrl = `/usuario/instruccion${instruccionId}.html`;
+                    pendingRedirectUrl = `/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}&tipo=${currentActivityType}&nombre=${encodeURIComponent(currentResourceName)}&url=${encodeURIComponent(currentResourceUrl)}`;
                     
                     const reasonEl = document.getElementById('recommendationReason');
                     if (reasonEl && diagnosis.razon_recomendacion) {
