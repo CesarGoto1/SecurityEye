@@ -51,6 +51,12 @@ let currentResourceName = null;
 let pendingRedirectUrl = null;
 let isRecommendationModalOpen = false;
 
+// Referencias al nuevo modal de actividad
+const activityModalElement = document.getElementById('activityModal');
+const activityModal = new bootstrap.Modal(activityModalElement);
+const activityModalBody = document.getElementById('activityModalBody');
+const activityModalLabel = document.getElementById('activityModalLabel');
+
 
 // Constantes y umbrales
 const CALIBRATION_DURATION = 10;
@@ -354,22 +360,17 @@ function startCamera(isResuming = false) {
         if (statusOverlay) statusOverlay.classList.add('d-none');
         
         lastFrameTime = performance.now() / 1000;
-        // metricsLastSent ya se restaura en DOMContentLoaded o se inicializa a 0 si es sesión nueva.
         
         if (isResuming) {
-            console.log("Reanudando sesión de monitoreo (manteniendo startTime y métricas).");
+            console.log("Reanudando sesión de monitoreo...");
             appState = 'MONITORING';
-            // startTime ya fue ajustado en DOMContentLoaded, no lo sobrescribimos aquí.
-            // lastBlinkTime también debería haber sido restaurado en DOMContentLoaded.
-
-        } else { // Si es una sesión completamente nueva
+        } else {
             appState = 'CALIBRATING';
-            startTime = performance.now() / 1000; // Aquí sí se inicializa para una sesión nueva
-            lastBlinkTime = startTime; // Inicializar lastBlinkTime para nueva sesión
+            startTime = performance.now() / 1000;
+            lastBlinkTime = startTime;
             calibrationEARs = [];
             calibrationMARs = [];
             crearSesion();
-            // Inicializar todas las métricas a cero para una sesión nueva
             blinkCounter = 0;
             incompleteBlinks = 0;
             accumulatedClosureTime = 0;
@@ -386,13 +387,29 @@ function startCamera(isResuming = false) {
     });
 }
 
-function stopCamera() {
+function pauseMonitoring() {
+    console.log("Pausando monitoreo...");
+    running = false;
+    if (camera) camera.stop();
+    statusText.textContent = "Monitoreo Pausado";
+    startBtn.disabled = false;
+    endSessionBtn.disabled = true;
+}
+
+function resumeMonitoring() {
+    console.log("Reanudando monitoreo...");
+    startCamera(true);
+    startBtn.disabled = true;
+    endSessionBtn.disabled = false;
+    statusText.textContent = "Monitoreando...";
+}
+
+function completeStopMonitoring() {
     running = false;
     if (camera) camera.stop();
     statusOverlay.classList.add('d-none');
     appState = 'IDLE';
 }
-
 // ==========================================
 // 5. GESTIÓN DE SESIONES
 // ==========================================
@@ -401,7 +418,7 @@ async function crearSesion() {
     if (!sesionId || !currentActivityType) {
         console.error('Faltan datos de sesión');
         alert('Error: Sesión no válida');
-        stopCamera();
+        completeStopMonitoring(); // Usar la nueva función de parada completa
         return;
     }
     console.log('Usando sesión existente con ID:', sesionId);
@@ -493,9 +510,8 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
 }
 
 async function finalizarSesion() {
-    stopCamera();
+    completeStopMonitoring(); // Usar la nueva función de parada completa
     endSessionBtn.disabled = true;
-    sessionStorage.removeItem('activeMonitoringSession'); // NEW: Clear active session state
     mostrarModalKSS();
 }
 
@@ -546,7 +562,6 @@ function mostrarModalKSS() {
                 });
 
                 if (response.ok) {
-                    sessionStorage.removeItem('activeMonitoringSession'); // NEW: Clear active session state
                     window.location.href = `/usuario/resumen.html?sesion_id=${sesionId}`;
                 } else {
                     alert('Error al guardar la sesión final.');
@@ -557,6 +572,48 @@ function mostrarModalKSS() {
             }
         };
     });
+}
+
+async function cargarYMostrarActividadEnModal(urlActividad, titulo, actividadData = {}) {
+    console.log(`Cargando actividad: ${titulo} desde ${urlActividad}`);
+    activityModalLabel.textContent = titulo;
+    activityModalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div></div>';
+    activityModal.show();
+
+    try {
+        // Fetch el contenido HTML de la actividad
+        const response = await fetch(urlActividad);
+        if (!response.ok) throw new Error(`No se pudo cargar la actividad: ${urlActividad}`);
+        const htmlContent = await response.text();
+
+        // Extraer el body (o una parte específica) y el script del contenido
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        const activityBodyContent = doc.querySelector('.activity-card') || doc.body; // Coger .activity-card si existe, sino todo el body
+
+        activityModalBody.innerHTML = activityBodyContent.innerHTML;
+
+        // Ejecutar scripts dentro del contenido cargado
+        const scripts = activityBodyContent.querySelectorAll('script');
+        scripts.forEach(oldScript => {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(attr => {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            newScript.textContent = oldScript.textContent;
+            activityModalBody.appendChild(newScript);
+        });
+
+        // Pasar datos de la actividad al script inyectado si es necesario
+        // Esto depende de cómo las actividades manejen sus datos
+        if (window.initActivity) { // Si la actividad tiene una función de inicialización
+            window.initActivity(actividadData);
+        }
+
+    } catch (error) {
+        console.error('Error al cargar la actividad en el modal:', error);
+        activityModalBody.innerHTML = `<p class="text-danger">Error al cargar la actividad: ${error.message}</p>`;
+    }
 }
 
 function mostrarAlertaFatiga() {
@@ -578,6 +635,9 @@ async function abrirModalDescanso() {
         console.log('Modal de descanso no disponible; se omite.');
         return;
     }
+    // Pausar monitoreo antes de abrir el modal
+    pauseMonitoring();
+
     try {
         const response = await fetch('/actividades-descanso');
         const data = await response.json();
@@ -587,8 +647,13 @@ async function abrirModalDescanso() {
         data.actividades.forEach(act => {
             const btn = document.createElement('button');
             btn.className = 'btn btn-outline-primary';
-            btn.innerHTML = `<i class="bi bi-play-circle"></i> ${act.nombre} (${act.duracion}s)`;
-            btn.onclick = () => realizarActividadDescanso(act);
+            btn.innerHTML = `<i class="bi bi-play-circle"></i> ${act.nombre} (${act.duracion_seg}s)`; // Usar duracion_seg
+            // Modificar para abrir el modal de actividad genérico
+            btn.onclick = () => {
+                const breakModal = bootstrap.Modal.getInstance(modalEl);
+                if (breakModal) breakModal.hide(); // Cerrar el modal de selección de descanso
+                cargarYMostrarActividadEnModal(`/usuario/instruccion${act.id}.html`, act.nombre, act);
+            };
             container.appendChild(btn);
         });
         const breakModal = new bootstrap.Modal(modalEl);
@@ -624,34 +689,15 @@ async function realizarActividadDescanso(actividad) {
     if (breakModal) breakModal.hide();
 }
 
-window.addEventListener('beforeunload', () => {
-    if (sesionId && running && appState === 'MONITORING') {
-        const elapsed = (performance.now() / 1000) - startTime; // Calcular el tiempo transcurrido total
-        const activeSessionState = {
-            sesion_id: sesionId,
-            tipo: currentActivityType,
-            nombre: currentResourceName,
-            url: currentResourceUrl,
-            // --- MÉTRICAS Y ESTADO A GUARDAR ---
-            elapsedTime: elapsed, // Tiempo transcurrido acumulado
-            blinkCounter: blinkCounter,
-            incompleteBlinks: incompleteBlinks,
-            yawnCounter: yawnCounter,
-            alertasCount: alertasCount,
-            maxSinParpadeo: maxSinParpadeo,
-            momentosFatiga: momentosFatiga,
-            metricsLastSent: metricsLastSent,
-            accumulatedClosureTime: accumulatedClosureTime,
-            measureFramesTotal: measureFramesTotal,
-            measureFramesClosed: measureFramesClosed,
-            totalIrisDistance: totalIrisDistance,
-            frameCount: frameCount,
-            lastBlinkTime: lastBlinkTime // Guardar también el lastBlinkTime
-        };
-        sessionStorage.setItem('activeMonitoringSession', JSON.stringify(activeSessionState));
-        console.log('Estado de sesión de monitoreo guardado para reanudar.', activeSessionState);
-    }
+// Listener para cuando el modal de actividad se cierra
+activityModalElement.addEventListener('hidden.bs.modal', () => {
+    console.log('Modal de actividad cerrado. Reanudando monitoreo.');
+    activityModalBody.innerHTML = ''; // Limpiar el contenido del modal
+    resumeMonitoring(); // Reanudar el monitoreo
 });
+
+
+
 
 if (startBtn) startBtn.addEventListener('click', startCamera);
 if (endSessionBtn) endSessionBtn.addEventListener('click', finalizarSesion);
@@ -676,65 +722,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const resumeStateJSON = sessionStorage.getItem('resumeState');
-    const activeMonitoringSessionJSON = sessionStorage.getItem('activeMonitoringSession'); // NEW
-
-    let sessionToResume = null;
-    let isFromRecommendation = false;
-
     if (resumeStateJSON) {
-        // Redirección desde recomendación de fatiga crítica.
-        // Aquí cargamos los datos básicos para la redirección,
-        // pero las métricas acumuladas deben venir de 'activeMonitoringSession'
-        // que debió guardarse justo antes de la redirección.
-        isFromRecommendation = true;
-        sessionToResume = JSON.parse(resumeStateJSON);
-        sessionStorage.removeItem('resumeState'); // Limpiar resumeState después de usar
-        console.log("Detectado estado para reanudar sesión (desde recomendación).");
-    } else if (activeMonitoringSessionJSON) {
-        // Reanudación de una sesión pausada genéricamente
-        sessionToResume = JSON.parse(activeMonitoringSessionJSON);
-        console.log("Detectado estado para reanudar sesión (previamente activa).");
-    }
-
-    if (sessionToResume) {
-        sesionId = sessionToResume.sesion_id;
-        currentActivityType = sessionToResume.tipo;
-        currentResourceName = sessionToResume.nombre;
-        currentResourceUrl = sessionToResume.url;
-
-        // --- Restaurar métricas acumuladas ---
-        blinkCounter = sessionToResume.blinkCounter || 0;
-        incompleteBlinks = sessionToResume.incompleteBlinks || 0;
-        yawnCounter = sessionToResume.yawnCounter || 0;
-        alertasCount = sessionToResume.alertasCount || 0;
-        maxSinParpadeo = sessionToResume.maxSinParpadeo || 0;
-        momentosFatiga = sessionToResume.momentosFatiga || [];
-        metricsLastSent = sessionToResume.metricsLastSent || 0;
-        accumulatedClosureTime = sessionToResume.accumulatedClosureTime || 0;
-        measureFramesTotal = sessionToResume.measureFramesTotal || 0;
-        measureFramesClosed = sessionToResume.measureFramesClosed || 0;
-        totalIrisDistance = sessionToResume.totalIrisDistance || 0;
-        frameCount = sessionToResume.frameCount || 0;
-        lastBlinkTime = sessionToResume.lastBlinkTime || 0;
-
-        // Ajustar startTime para que el tiempo total acumulado se mantenga
-        // startTime debe ser el "ahora" menos el tiempo transcurrido total acumulado.
-        startTime = (performance.now() / 1000) - (sessionToResume.elapsedTime || 0);
-
-        // Actualizar la UI inmediatamente
-        if (blinkCountEl) blinkCountEl.textContent = blinkCounter;
-        if (yawnCountEl) yawnCountEl.textContent = yawnCounter;
-        if (alertsCountEl) alertsCountEl.textContent = alertasCount;
-        
-        // Actualizar el timerEl con el tiempo acumulado
-        const minutes = Math.floor((performance.now() / 1000 - startTime) / 60);
-        const seconds = Math.floor((performance.now() / 1000 - startTime) % 60);
-        timerEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
+        console.log("Detectado estado para reanudar sesión.");
+        const resumeState = JSON.parse(resumeStateJSON);
+        sessionStorage.removeItem('resumeState');
+        sesionId = resumeState.sesion_id;
+        currentActivityType = resumeState.tipo;
+        currentResourceName = resumeState.nombre;
+        currentResourceUrl = resumeState.url;
         const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
         if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
         cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
-        startCamera(true); // Reanudar cámara sin crear una nueva sesión
+        startCamera(true);
     } else {
         console.log("Iniciando nueva sesión desde parámetros de URL.");
         const params = new URLSearchParams(window.location.search);
@@ -879,6 +878,11 @@ function cargarContenido(tipo, url, nombre) {
     }
 }
 
+// Exponer función para que las actividades inyectadas puedan cerrar el modal
+window.closeActivityModal = () => {
+    activityModal.hide();
+};
+
 // ==========================================
 // 9. MANEJO DEL MODAL DE RECOMENDACIÓN
 // ==========================================
@@ -888,15 +892,18 @@ const recommendationModalEl = document.getElementById('recommendationModal');
 if (confirmBtn && recommendationModalEl) {
     confirmBtn.onclick = () => {
         if (pendingRedirectUrl) {
-            stopCamera();
-            const resumeState = {
-                sesion_id: sesionId,
-                tipo: currentActivityType,
-                nombre: currentResourceName,
-                url: currentResourceUrl
-            };
-            sessionStorage.setItem('resumeState', JSON.stringify(resumeState));
-            window.location.href = pendingRedirectUrl;
+            pauseMonitoring(); // Pausar monitoreo antes de abrir el modal de actividad
+            // Extraer ID de la instrucción de pendingRedirectUrl
+            const instruccionIdMatch = pendingRedirectUrl.match(/instruccion(\d+)\.html/);
+            const instruccionId = instruccionIdMatch ? instruccionIdMatch[1] : null;
+            const instruccionName = `Instrucción ${instruccionId || 'Desconocida'}`; // Nombre genérico
+
+            // Cerrar el modal de recomendación antes de abrir el de actividad
+            const recommendationBsModal = bootstrap.Modal.getInstance(recommendationModalEl);
+            if (recommendationBsModal) recommendationBsModal.hide();
+
+            // Usar la nueva función para cargar la actividad en el modal
+            cargarYMostrarActividadEnModal(pendingRedirectUrl, instruccionName);
         }
     };
 
