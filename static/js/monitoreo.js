@@ -1,6 +1,6 @@
 // ==========================================
 // MONITOREO CONTINUO - SecurityEye
-// Adaptado de medicion.js para flujo continuo
+// Adaptado para redirección en lugar de Modals
 // ==========================================
 
 // ==========================================
@@ -51,13 +51,6 @@ let currentResourceName = null;
 let pendingRedirectUrl = null;
 let isRecommendationModalOpen = false;
 
-// Referencias al nuevo modal de actividad
-const activityModalElement = document.getElementById('activityModal');
-const activityModal = new bootstrap.Modal(activityModalElement);
-const activityModalBody = document.getElementById('activityModalBody');
-const activityModalLabel = document.getElementById('activityModalLabel');
-
-
 // Constantes y umbrales
 const CALIBRATION_DURATION = 10;
 const ALERT_COOLDOWN = 30;
@@ -80,7 +73,7 @@ let measureFramesClosed = 0;
 let isBlinking = false;
 let minEarInBlink = 1.0;
 let yawnCounter = 0;
-let earValues = []; // Acumulador para EAR promedio
+let earValues = []; 
 let isYawning = false;
 let yawnStartTime = 0;
 const MIN_YAWN_TIME = 1.5;
@@ -410,6 +403,7 @@ function completeStopMonitoring() {
     statusOverlay.classList.add('d-none');
     appState = 'IDLE';
 }
+
 // ==========================================
 // 5. GESTIÓN DE SESIONES
 // ==========================================
@@ -418,7 +412,7 @@ async function crearSesion() {
     if (!sesionId || !currentActivityType) {
         console.error('Faltan datos de sesión');
         alert('Error: Sesión no válida');
-        completeStopMonitoring(); // Usar la nueva función de parada completa
+        completeStopMonitoring();
         return;
     }
     console.log('Usando sesión existente con ID:', sesionId);
@@ -486,6 +480,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
                     isRecommendationModalOpen = true;
 
                     const instruccionId = diagnosis.instruccion_sugerida;
+                    // Preparamos la URL de redirección
                     pendingRedirectUrl = `/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}`;
                     
                     const reasonEl = document.getElementById('recommendationReason');
@@ -495,11 +490,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
 
                     const recommendationModal = new bootstrap.Modal(document.getElementById('recommendationModal'));
                     recommendationModal.show();
-                } else if (nivelFatigaLimpio !== 'Crítico' || !diagnosis.instruccion_sugerida) {
-                    console.log('Condición de fatiga crítica no cumplida. No se muestra modal.');
-                }
-            } else {
-                console.log('La respuesta no contenía un diagnóstico válido en la clave "diagnostico".');
+                } 
             }
         } else {
             console.warn('Error guardando métricas:', response.status, await response.text());
@@ -510,7 +501,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
 }
 
 async function finalizarSesion() {
-    completeStopMonitoring(); // Usar la nueva función de parada completa
+    completeStopMonitoring();
     endSessionBtn.disabled = true;
     mostrarModalKSS();
 }
@@ -552,8 +543,6 @@ function mostrarModalKSS() {
                 es_fatiga: esFatiga
             };
 
-            console.log('Payload final:', payload);
-
             try {
                 const response = await fetch(`${API_BASE}/save-fatigue`, {
                     method: 'POST',
@@ -574,65 +563,6 @@ function mostrarModalKSS() {
     });
 }
 
-async function cargarYMostrarActividadEnModal(urlActividad, titulo, actividadData = {}) {
-    console.log(`Cargando actividad: ${titulo} desde ${urlActividad}`);
-    activityModalLabel.textContent = titulo;
-    activityModalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div></div>';
-    activityModal.show();
-
-    try {
-        const response = await fetch(urlActividad);
-        if (!response.ok) throw new Error(`No se pudo cargar la actividad: ${urlActividad}`);
-        const htmlContent = await response.text();
-
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlContent, 'text/html');
-        
-        // --- 1. Inyectar estilos ---
-        const headLinks = doc.head.querySelectorAll('link[rel="stylesheet"]');
-        const existingLinks = document.head.querySelectorAll('link[data-activity-css]');
-        
-        // Remover estilos de actividades previas para evitar conflictos
-        existingLinks.forEach(link => link.remove());
-
-        headLinks.forEach(link => {
-            const newLink = document.createElement('link');
-            // Copiar todos los atributos, incluyendo href, rel, etc.
-            Array.from(link.attributes).forEach(attr => {
-                newLink.setAttribute(attr.name, attr.value);
-            });
-            newLink.setAttribute('data-activity-css', 'true'); // Marca para fácil remoción
-            document.head.appendChild(newLink);
-        });
-
-        // --- 2. Inyectar el contenido HTML ---
-        // Coger el contenido de .activity-card si existe, sino todo el body
-        const activityContent = doc.querySelector('.activity-card') || doc.body; 
-        activityModalBody.innerHTML = activityContent.innerHTML;
-
-        // --- 3. Ejecutar scripts dentro del contenido cargado ---
-        // Importante: Los scripts deben ser re-creados para que el navegador los ejecute.
-        const scripts = activityContent.querySelectorAll('script'); // Seleccionar del contenido inyectado
-        scripts.forEach(oldScript => {
-            const newScript = document.createElement('script');
-            Array.from(oldScript.attributes).forEach(attr => {
-                newScript.setAttribute(attr.name, attr.value);
-            });
-            newScript.textContent = oldScript.textContent;
-            activityModalBody.appendChild(newScript);
-        });
-
-        // Pasar datos de la actividad al script inyectado si es necesario
-        if (window.initActivity) { // Si la actividad tiene una función de inicialización
-            window.initActivity(actividadData);
-        }
-
-    } catch (error) {
-        console.error('Error al cargar la actividad en el modal:', error);
-        activityModalBody.innerHTML = `<p class="text-danger">Error al cargar la actividad: ${error.message}</p>`;
-    }
-}
-
 function mostrarAlertaFatiga() {
     if (alertBanner && alertText) {
         alertBanner.classList.remove('d-none');
@@ -641,18 +571,15 @@ function mostrarAlertaFatiga() {
         setTimeout(() => {
             alertBanner.classList.add('d-none');
         }, 5000);
-    } else {
-        console.log('Alerta de fatiga generada (Contador incrementado). El elemento visual #alertBanner no existe en el HTML.');
     }
 }
 
 async function abrirModalDescanso() {
     const modalEl = document.getElementById('breakActivityModal');
     if (!modalEl) {
-        console.log('Modal de descanso no disponible; se omite.');
         return;
     }
-    // Pausar monitoreo antes de abrir el modal
+    // Pausar monitoreo antes de abrir el modal de selección
     pauseMonitoring();
 
     try {
@@ -664,12 +591,15 @@ async function abrirModalDescanso() {
         data.actividades.forEach(act => {
             const btn = document.createElement('button');
             btn.className = 'btn btn-outline-primary';
-            btn.innerHTML = `<i class="bi bi-play-circle"></i> ${act.nombre} (${act.duracion_seg}s)`; // Usar duracion_seg
-            // Modificar para abrir el modal de actividad genérico
+            btn.innerHTML = `<i class="bi bi-play-circle"></i> ${act.nombre} (${act.duracion_seg}s)`;
+            
+            // Lógica de redirección al hacer click en un descanso
             btn.onclick = () => {
                 const breakModal = bootstrap.Modal.getInstance(modalEl);
-                if (breakModal) breakModal.hide(); // Cerrar el modal de selección de descanso
-                cargarYMostrarActividadEnModal(`/usuario/instruccion${act.id}.html`, act.nombre, act);
+                if (breakModal) breakModal.hide();
+                
+                // Redirigir directamente a la página de la instrucción
+                window.location.href = `/usuario/instruccion${act.id}.html?sesion_id=${sesionId}`;
             };
             container.appendChild(btn);
         });
@@ -679,47 +609,6 @@ async function abrirModalDescanso() {
         console.error('Error cargando actividades:', e);
     }
 }
-
-async function realizarActividadDescanso(actividad) {
-    console.log('Realizando:', actividad.nombre);
-    
-    if (sesionId) {
-        try {
-            const response = await fetch(`${API_BASE}/registrar-descanso`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sesion_id: sesionId,
-                    actividad_id: actividad.id,
-                    actividad_nombre: actividad.nombre,
-                    duracion_seg: actividad.duracion_seg
-                })
-            });
-            if (response.ok) console.log('Actividad de descanso registrada en BD');
-        } catch (e) {
-            console.error('Error registrando descanso:', e);
-        }
-    }
-    
-    const modalEl = document.getElementById('breakActivityModal');
-    const breakModal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
-    if (breakModal) breakModal.hide();
-}
-
-// Listener para cuando el modal de actividad se cierra
-activityModalElement.addEventListener('hidden.bs.modal', () => {
-    console.log('Modal de actividad cerrado. Reanudando monitoreo.');
-    activityModalBody.innerHTML = ''; // Limpiar el contenido del modal
-
-    // --- Remover estilos de actividad inyectados ---
-    const existingLinks = document.head.querySelectorAll('link[data-activity-css]');
-    existingLinks.forEach(link => link.remove());
-
-    resumeMonitoring(); // Reanudar el monitoreo
-});
-
-
-
 
 if (startBtn) startBtn.addEventListener('click', startCamera);
 if (endSessionBtn) endSessionBtn.addEventListener('click', finalizarSesion);
@@ -757,7 +646,6 @@ document.addEventListener('DOMContentLoaded', () => {
         cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
         startCamera(true);
     } else {
-        console.log("Iniciando nueva sesión desde parámetros de URL.");
         const params = new URLSearchParams(window.location.search);
         sesionId = params.get('sesion_id');
         currentActivityType = params.get('tipo');
@@ -900,11 +788,6 @@ function cargarContenido(tipo, url, nombre) {
     }
 }
 
-// Exponer función para que las actividades inyectadas puedan cerrar el modal
-window.closeActivityModal = () => {
-    activityModal.hide();
-};
-
 // ==========================================
 // 9. MANEJO DEL MODAL DE RECOMENDACIÓN
 // ==========================================
@@ -914,24 +797,21 @@ const recommendationModalEl = document.getElementById('recommendationModal');
 if (confirmBtn && recommendationModalEl) {
     confirmBtn.onclick = () => {
         if (pendingRedirectUrl) {
-            pauseMonitoring(); // Pausar monitoreo antes de abrir el modal de actividad
-            // Extraer ID de la instrucción de pendingRedirectUrl
-            const instruccionIdMatch = pendingRedirectUrl.match(/instruccion(\d+)\.html/);
-            const instruccionId = instruccionIdMatch ? instruccionIdMatch[1] : null;
-            const instruccionName = `Instrucción ${instruccionId || 'Desconocida'}`; // Nombre genérico
-
-            // Cerrar el modal de recomendación antes de abrir el de actividad
+            // Cerrar el modal actual
             const recommendationBsModal = bootstrap.Modal.getInstance(recommendationModalEl);
             if (recommendationBsModal) recommendationBsModal.hide();
 
-            // Usar la nueva función para cargar la actividad en el modal
-            cargarYMostrarActividadEnModal(pendingRedirectUrl, instruccionName);
+            // Redirigir a la página de la actividad
+            window.location.href = pendingRedirectUrl;
         }
     };
 
     recommendationModalEl.addEventListener('hidden.bs.modal', () => {
         isRecommendationModalOpen = false;
-        pendingRedirectUrl = null;
+        // Si no aceptó (canceló o cerró), limpiamos la URL pendiente
+        if (!document.activeElement || document.activeElement.id !== 'btnConfirmRecommendation') {
+            pendingRedirectUrl = null;
+        }
         console.log('Modal de recomendación cerrado.');
     });
 }
