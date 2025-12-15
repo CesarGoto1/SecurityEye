@@ -26,17 +26,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- SERVIR ARCHIVOS ESTÁTICOS ---
+# --- SERVIR ARCHIVOS ESTÁTICOS Y PÁGINAS HTML ---
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+import os # Asegurarse de que os está importado
 
-# Montar directorios estáticos
+# Montar directorio estático para CSS, JS, etc.
+# La ruta 'static' es relativa a la raíz del proyecto desde donde se ejecuta el servidor.
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
 @app.get("/", include_in_schema=False)
-async def root():
+async def serve_root_index():
     return FileResponse("templates/index.html")
+
+@app.get("/{page}.html", include_in_schema=False)
+async def serve_root_pages(page: str):
+    file_path = f"templates/{page}.html"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Page not found")
+
+@app.get("/usuario/{page:path}", include_in_schema=False)
+async def serve_usuario_pages(page: str):
+    file_path = f"templates/usuario/{page}"
+    if not os.path.exists(file_path) or os.path.isdir(file_path):
+        # Si la ruta es un directorio, intentar servir index.html dentro de él
+        index_path = os.path.join(file_path, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+    elif os.path.exists(file_path):
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Page not found")
+
+@app.get("/admin/{page:path}", include_in_schema=False)
+async def serve_admin_pages(page: str):
+    file_path = f"templates/admin/{page}"
+    if not os.path.exists(file_path) or os.path.isdir(file_path):
+        index_path = os.path.join(file_path, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+    elif os.path.exists(file_path):
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Page not found")
 
 
 # --- MODELOS DE DATOS ---
