@@ -563,17 +563,15 @@ function mostrarModalKSS() {
                 });
 
                 if (response.ok) {
-                    // Finalizar formalmente la sesión para registrar fecha_fin
-                    await fetch(`${API_BASE}/end-session/${sesionId}`, { method: 'POST' });
-                    
-                    // Redirigir a resumen (ruta estática)
+                    // La lógica de finalización ahora está en el backend.
+                    // Simplemente redirigir a la página de resumen.
                     window.location.href = `/usuario/resumen.html?sesion_id=${sesionId}`;
                 } else {
-                    alert('Error al guardar sesión');
+                    alert('Error al guardar la sesión final.');
                 }
             } catch (e) {
                 console.error('Error:', e);
-                alert('No se pudo conectar al servidor');
+                alert('No se pudo conectar al servidor para finalizar la sesión.');
             }
         };
     });

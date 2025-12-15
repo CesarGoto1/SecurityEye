@@ -375,7 +375,8 @@ async def save_fatigue(data: FatigueResult):
                     alertas = %s, 
                     kss_final = %s,
                     es_fatiga = %s,
-                    resumen = %s
+                    resumen = %s,
+                    fecha_fin = NOW()
                 WHERE id = %s
                 """,
                 (data.tiempo_total_seg, data.alertas, data.kss_final, data.es_fatiga, summary_json, sesion_id)
