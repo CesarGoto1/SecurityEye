@@ -7,7 +7,7 @@
 // 1. VARIABLES GLOBALES Y REFERENCIAS
 // ==========================================
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = '';
 const videoElement = document.getElementById('videoElement');
 const canvasElement = document.getElementById('output_canvas');
 const canvasCtx = canvasElement.getContext('2d');
@@ -597,7 +597,7 @@ async function abrirModalDescanso() {
         return;
     }
     try {
-        const response = await fetch('http://localhost:8000/actividades-descanso');
+        const response = await fetch('/actividades-descanso');
         const data = await response.json();
 
         const container = document.getElementById('breakActivitiesContainer');

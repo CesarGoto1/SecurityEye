@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function cargarDatosSesion() {
     try {
-        const response = await fetch('http://localhost:8000/sesiones/' + sesionId);
+        const response = await fetch('/sesiones/' + sesionId);
         if (!response.ok) throw new Error('No se encontró la sesión');
 
         sesionData = await response.json();
@@ -119,7 +119,7 @@ async function cargarDatosSesion() {
 
 async function generarDiagnosticoIA() {
     try {
-        const response = await fetch('http://localhost:8000/get-or-create-diagnosis', {
+        const response = await fetch('/get-or-create-diagnosis', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sesion_id: sesionId })

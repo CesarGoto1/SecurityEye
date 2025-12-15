@@ -16,7 +16,7 @@ if (!sesionId) {
 // =====================================================
 document.addEventListener("DOMContentLoaded", async () => {
     try {
-        const resp = await fetch(`http://localhost:8000/sesiones/${sesionId}`);
+        const resp = await fetch(`/sesiones/${sesionId}`);
 
         if (!resp.ok) {
             throw new Error("Error al obtener los datos de la sesión");

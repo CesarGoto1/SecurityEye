@@ -22,7 +22,7 @@ let graficoReduccion = null;
 // ========================================================
 document.addEventListener("DOMContentLoaded", async () => {
     try {
-        const resp = await fetch("http://localhost:8000/admin/all-sessions");
+        const resp = await fetch("/admin/all-sessions");
         const data = await resp.json();
 
         if (!data.ok) {

@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function cargarHistorial() {
     try {
-        const response = await fetch('http://localhost:8000/get-user-history', {
+        const response = await fetch('/get-user-history', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usuario_id: usuarioData.id })
@@ -163,7 +163,7 @@ function calcularEstadisticas() {
 
 async function abrirDetalles(sesionId) {
     try {
-        const response = await fetch(`http://localhost:8000/sesiones/${sesionId}`);
+        const response = await fetch(`/sesiones/${sesionId}`);
         if (!response.ok) throw new Error('No se encontró sesión');
 
         const sesion = await response.json();
