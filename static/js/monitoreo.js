@@ -785,7 +785,7 @@ const recommendationModalEl = document.getElementById('recommendationModal');
 if (confirmBtn && recommendationModalEl) {
     confirmBtn.onclick = () => {
         if (pendingRedirectUrl) {
-            stopCamera();
+            completeStopMonitoring();
             // Ya no es necesario guardar resumeState, solo redirigir
             window.location.href = pendingRedirectUrl;
         }

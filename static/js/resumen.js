@@ -54,7 +54,7 @@ async function cargarDatosSesion() {
         sesionData = await response.json();
 
         // Llenar información de sesión
-        const fecha = new Date(sesionData.fecha_inicio).toLocaleString('es-ES');
+        const fecha = new Date(sesionData.fecha_inicio).toLocaleDateString('es-ES');
         document.getElementById('sessionDate').textContent = fecha;
 
         // Convertir segundos a formato mm:ss
