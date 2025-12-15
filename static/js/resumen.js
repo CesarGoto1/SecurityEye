@@ -34,7 +34,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
         await cargarDatosSesion();
-        await generarDiagnosticoIA();
         construirGraficos();
     } catch (e) {
         console.error('Error cargando resumen:', e);
@@ -120,56 +119,7 @@ async function cargarDatosSesion() {
     }
 }
 
-// ==========================================
-// 4. GENERAR DIAGNÓSTICO IA
-// ==========================================
 
-async function generarDiagnosticoIA() {
-    try {
-        const response = await fetch('/get-or-create-diagnosis', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sesion_id: sesionId })
-        });
-
-        if (!response.ok) {
-            throw new Error('Error en diagnóstico IA');
-        }
-
-        diagnosisData = await response.json();
-
-        // Mostrar diagnóstico general
-        const diagnosisContent = document.getElementById('diagnosisContent');
-        diagnosisContent.innerHTML = `
-            <p><strong>Diagnóstico:</strong> ${diagnosisData.diagnostico_general}</p>
-            ${diagnosisData.severidad_fatiga_final ? `
-                <p class="mb-0">
-                    <strong>Severidad:</strong>
-                    <span class="badge bg-${getSeveridadClass(diagnosisData.severidad_fatiga_final)}">
-                        ${diagnosisData.severidad_fatiga_final}
-                    </span>
-                </p>
-            ` : ''}
-        `;
-
-        // Recomendaciones
-        if (diagnosisData.recomendaciones_generales) {
-            const recomList = document.getElementById('recommendationsList');
-            recomList.innerHTML = '';
-
-            diagnosisData.recomendaciones_generales.forEach(rec => {
-                const li = document.createElement('li');
-                li.textContent = rec;
-                recomList.appendChild(li);
-            });
-        }
-
-    } catch (e) {
-        console.error('Error generando diagnóstico:', e);
-        document.getElementById('diagnosisContent').innerHTML = 
-            '<p class="text-warning"><i class="bi bi-exclamation-triangle"></i> Análisis de IA no disponible</p>';
-    }
-}
 
 // ==========================================
 // 5. CONSTRUIR GRÁFICOS
@@ -295,13 +245,7 @@ function construirTimelineAlertas(momentos) {
 // 7. FUNCIONES AUXILIARES
 // ==========================================
 
-function getSeveridadClass(severidad) {
-    const text = severidad.toLowerCase();
-    if (text.includes('leve')) return 'success';
-    if (text.includes('moderada')) return 'warning';
-    if (text.includes('alta') || text.includes('severa')) return 'danger';
-    return 'info';
-}
+
 
 // Actualizar fecha de sesión en tiempo real
 function actualizarFechaActual() {

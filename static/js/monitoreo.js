@@ -481,7 +481,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
 
                     const instruccionId = diagnosis.instruccion_sugerida;
                     // Preparamos la URL de redirección
-                    pendingRedirectUrl = `/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}`;
+                    pendingRedirectUrl = `/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}&tipo=${currentActivityType}&nombre=${encodeURIComponent(currentResourceName)}&url=${encodeURIComponent(currentResourceUrl)}`;
                     
                     const reasonEl = document.getElementById('recommendationReason');
                     if (reasonEl && diagnosis.razon_recomendacion) {
@@ -632,41 +632,29 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    const resumeStateJSON = sessionStorage.getItem('resumeState');
-    if (resumeStateJSON) {
-        console.log("Detectado estado para reanudar sesión.");
-        const resumeState = JSON.parse(resumeStateJSON);
-        sessionStorage.removeItem('resumeState');
-        sesionId = resumeState.sesion_id;
-        currentActivityType = resumeState.tipo;
-        currentResourceName = resumeState.nombre;
-        currentResourceUrl = resumeState.url;
-        const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
-        if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
-        cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
-        startCamera(true);
-    } else {
-        const params = new URLSearchParams(window.location.search);
-        sesionId = params.get('sesion_id');
-        currentActivityType = params.get('tipo');
-        currentResourceName = params.get('nombre');
-        currentResourceUrl = params.get('url');
-        
-        if (currentActivityType === 'pdf' && !currentResourceUrl) {
-            currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
-            sessionStorage.removeItem('pdfDataUrl'); 
-        }
-
-        if (!sesionId || !currentActivityType || !currentResourceName) {
-            alert('Sesión no válida. Redirigiendo...');
-            window.location.href = 'seleccionar_actividad.html';
-            return;
-        }
-
-        const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
-        if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
-        cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
+    console.log("Cargando sesión desde parámetros de URL.");
+    const params = new URLSearchParams(window.location.search);
+    sesionId = params.get('sesion_id');
+    currentActivityType = params.get('tipo');
+    currentResourceName = params.get('nombre');
+    currentResourceUrl = params.get('url');
+    
+    // Para PDFs locales que no tienen URL directamente en el input
+    if (currentActivityType === 'pdf' && !currentResourceUrl) {
+        currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
+        sessionStorage.removeItem('pdfDataUrl'); 
     }
+
+    if (!sesionId || !currentActivityType || !currentResourceName) {
+        alert('Sesión no válida. Redirigiendo...');
+        window.location.href = 'seleccionar_actividad.html';
+        return;
+    }
+
+    const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
+    if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
+    cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
+    // No llamar a startCamera aquí, el usuario debe iniciar manualmente
 });
 
 // ==========================================
@@ -797,21 +785,15 @@ const recommendationModalEl = document.getElementById('recommendationModal');
 if (confirmBtn && recommendationModalEl) {
     confirmBtn.onclick = () => {
         if (pendingRedirectUrl) {
-            // Cerrar el modal actual
-            const recommendationBsModal = bootstrap.Modal.getInstance(recommendationModalEl);
-            if (recommendationBsModal) recommendationBsModal.hide();
-
-            // Redirigir a la página de la actividad
+            stopCamera();
+            // Ya no es necesario guardar resumeState, solo redirigir
             window.location.href = pendingRedirectUrl;
         }
     };
 
     recommendationModalEl.addEventListener('hidden.bs.modal', () => {
         isRecommendationModalOpen = false;
-        // Si no aceptó (canceló o cerró), limpiamos la URL pendiente
-        if (!document.activeElement || document.activeElement.id !== 'btnConfirmRecommendation') {
-            pendingRedirectUrl = null;
-        }
+        pendingRedirectUrl = null;
         console.log('Modal de recomendación cerrado.');
     });
 }
