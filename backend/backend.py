@@ -327,18 +327,6 @@ async def save_fatigue(data: FatigueResult):
             nivel_val, estado_txt, data.max_sin_parpadeo, data.alertas, momentos_json,
         ))
 
-        # Actualizar sesión con el último tiempo total y kss_final si está presente
-        if data.kss_final is not None:
-            cur.execute(
-                "UPDATE sesiones SET total_segundos = %s, alertas = %s, kss_final = %s WHERE id = %s",
-                (data.tiempo_total_seg, data.alertas, data.kss_final, sesion_id)
-            )
-        else:
-            cur.execute(
-                "UPDATE sesiones SET total_segundos = %s, alertas = %s WHERE id = %s",
-                (data.tiempo_total_seg, data.alertas, sesion_id)
-            )
-        
         # --- Llamada a N8N para diagnóstico ---
         try:
             n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://cagonzalez12.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
@@ -367,7 +355,6 @@ async def save_fatigue(data: FatigueResult):
                     response = await client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
                     response.raise_for_status()
                     responseData = response.json()
-                    # La respuesta de N8N es una lista con un objeto que tiene una clave 'json'
                     diagnostico_ia = responseData[0]['json'] if isinstance(responseData, list) and responseData and 'json' in responseData[0] else responseData
 
                 if diagnostico_ia and sesion_id:
@@ -377,6 +364,27 @@ async def save_fatigue(data: FatigueResult):
                     )
         except Exception as e:
             log.error(f"Error al contactar N8N: {e}")
+
+        # Actualizar sesión con el último tiempo total y kss_final si está presente
+        if data.kss_final is not None:
+            summary_json = json.dumps(diagnostico_ia) if diagnostico_ia else None
+            cur.execute(
+                """
+                UPDATE sesiones 
+                SET total_segundos = %s, 
+                    alertas = %s, 
+                    kss_final = %s,
+                    es_fatiga = %s,
+                    resumen = %s
+                WHERE id = %s
+                """,
+                (data.tiempo_total_seg, data.alertas, data.kss_final, data.es_fatiga, summary_json, sesion_id)
+            )
+        else:
+            cur.execute(
+                "UPDATE sesiones SET total_segundos = %s, alertas = %s WHERE id = %s",
+                (data.tiempo_total_seg, data.alertas, sesion_id)
+            )
 
         conn.commit()
         

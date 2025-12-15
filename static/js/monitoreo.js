@@ -427,8 +427,8 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
         max_sin_parpadeo: Math.round(maxSinParpadeo),
         alertas: alertasCount,
         momentos_fatiga: momentosFatiga,
-        nivel_subjetivo: 0, 
         es_fatiga: esFatiga
+        // Se elimina 'nivel_subjetivo', ya que no corresponde a este payload intermedio
     };
 
     try {
@@ -547,7 +547,7 @@ function mostrarModalKSS() {
                 tiempo_cierre: parseFloat(accumulatedClosureTime.toFixed(2)),
                 velocidad_ocular: parseFloat(avgVelocity.toFixed(4)),
                 max_sin_parpadeo: Math.round(maxSinParpadeo),
-                nivel_subjetivo: parseInt(kssValue),
+                kss_final: parseInt(kssValue),
                 alertas: alertasCount,
                 momentos_fatiga: momentosFatiga,
                 es_fatiga: esFatiga
@@ -563,6 +563,9 @@ function mostrarModalKSS() {
                 });
 
                 if (response.ok) {
+                    // Finalizar formalmente la sesión para registrar fecha_fin
+                    await fetch(`${API_BASE}/end-session/${sesionId}`, { method: 'POST' });
+                    
                     // Redirigir a resumen (ruta estática)
                     window.location.href = `/usuario/resumen.html?sesion_id=${sesionId}`;
                 } else {
