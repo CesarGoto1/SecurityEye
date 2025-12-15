@@ -564,7 +564,7 @@ function mostrarModalKSS() {
 
                 if (response.ok) {
                     // Redirigir a resumen (ruta estática)
-                    window.location.href = `/templates/usuario/resumen.html?sesion_id=${sesionId}`;
+                    window.location.href = `/usuario/resumen.html?sesion_id=${sesionId}`;
                 } else {
                     alert('Error al guardar sesión');
                 }
