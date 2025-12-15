@@ -4,7 +4,7 @@
 function cerrarSesion() {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = "/templates/login.html";
+    window.location.href = "/login.html";
 }
 
 // ========================================================
@@ -16,7 +16,7 @@ function protegerRuta(rolRequerido) {
     const usuarioStr = localStorage.getItem("usuario");
 
     if (!usuarioStr) {
-        window.location.href = "/templates/login.html";
+        window.location.href = "/login.html";
         return;
     }
 
@@ -25,14 +25,14 @@ function protegerRuta(rolRequerido) {
     // Protección para admin
     if (rolRequerido === "admin" && usuario.rol !== "admin") {
         alert("Acceso denegado. Solo administradores pueden acceder.");
-        window.location.href = "/templates/usuario/index.html";
+        window.location.href = "/usuario/index.html";
         return;
     }
 
     // Protección para usuario (bloquear admin)
     if (rolRequerido === "usuario" && usuario.rol === "admin") {
         alert("Los administradores no pueden acceder a esta sección.");
-        window.location.href = "/templates/admin/index.html";
+        window.location.href = "/admin/index.html";
         return;
     }
 }
