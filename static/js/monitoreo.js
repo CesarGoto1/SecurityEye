@@ -74,6 +74,7 @@ let measureFramesClosed = 0;
 let isBlinking = false;
 let minEarInBlink = 1.0;
 let yawnCounter = 0;
+let earValues = []; // Acumulador para EAR promedio
 let isYawning = false;
 let yawnStartTime = 0;
 const MIN_YAWN_TIME = 1.5;
@@ -335,7 +336,7 @@ faceMesh.onResults((results) => {
 // 4. CONTROL DE CÁMARA
 // ==========================================
 
-function startCamera() {
+function startCamera(isResuming = false) {
     if (!camera) {
         camera = new Camera(videoElement, {
             onFrame: async () => {
@@ -350,16 +351,23 @@ function startCamera() {
         running = true;
         startBtn.disabled = true;
         endSessionBtn.disabled = false;
-        statusOverlay.classList.remove('d-none');
-        appState = 'CALIBRATING';
-        startTime = performance.now() / 1000;
-        lastFrameTime = startTime;
+        if (statusOverlay) statusOverlay.classList.add('d-none');
+        
+        lastFrameTime = performance.now() / 1000;
         metricsLastSent = 0;
-
-        calibrationEARs = [];
-        calibrationMARs = [];
-
-        crearSesion();
+        
+        if (isResuming) {
+            console.log("Reanudando sesión de monitoreo...");
+            appState = 'MONITORING';
+            startTime = performance.now() / 1000;
+            lastBlinkTime = startTime;
+        } else {
+            appState = 'CALIBRATING';
+            startTime = performance.now() / 1000;
+            calibrationEARs = [];
+            calibrationMARs = [];
+            crearSesion();
+        }
     });
 }
 
@@ -395,6 +403,10 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const activityType = currentActivityType;
 
+    // Calcular EAR promedio para este intervalo
+    const ear_promedio = earValues.length > 0 ? earValues.reduce((a, b) => a + b, 0) / earValues.length : 0;
+    earValues = []; // Resetear para el próximo intervalo
+
     const sebr = blinkCounter;
     const pctIncompletos = sebr > 0 ? (incompleteBlinks / sebr) * 100 : 0;
     const esFatiga = perclos >= 15 || alertasCount >= 2;
@@ -406,6 +418,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
         tiempo_total_seg: Math.round(tiempoTranscurrido),
         perclos: parseFloat(perclos.toFixed(2)),
         sebr: sebr,
+        ear_promedio: parseFloat(ear_promedio.toFixed(4)), // Añadir EAR promedio
         blink_rate_min: parseFloat(blinkRateMin.toFixed(2)),
         pct_incompletos: parseFloat(pctIncompletos.toFixed(2)),
         num_bostezos: yawnCounter,
@@ -451,29 +464,24 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
                 console.log(`DEBUG: Valor de instruccion_sugerida: ${diagnosis.instruccion_sugerida}`);
 
                 if (nivelFatigaLimpio === 'Crítico' && diagnosis.instruccion_sugerida) {
-                    console.log('CONDICIÓN CUMPLIDA. Solicitando confirmación al usuario...');
-                    
-                    // 1. Construimos la URL pero NO redirigimos todavía
-                    const instruccionId = diagnosis.instruccion_sugerida;
-                    pendingRedirectUrl = `/templates/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}`;
-                    
-                    // 2. Preparamos el mensaje del modal (opcional, si el back trae un mensaje breve)
-                    const razonEl = document.getElementById('recommendationReason');
-                    if (razonEl) {
-                        // Si el backend devuelve un 'diagnostico_breve', úsalo, si no, texto genérico
-                        razonEl.textContent = diagnosis.diagnostico_breve || "Tus métricas oculares sugieren que necesitas una pausa inmediata.";
-                    }
+                    console.log('CONDICIÓN CUMPLIDA. Redirigiendo...');
+                    stopCamera();
 
-                    // 3. Abrimos el modal si no está abierto ya
-                    if (!isRecommendationModalOpen) {
-                        const recModal = new bootstrap.Modal(document.getElementById('recommendationModal'));
-                        recModal.show();
-                        isRecommendationModalOpen = true;
-                    }
-                    
-                    return; // Salimos de la función sin redirigir
+                    // Guardar el estado actual para poder reanudar después de la actividad
+                    const resumeState = {
+                        sesion_id: sesionId,
+                        tipo: currentActivityType,
+                        nombre: currentResourceName,
+                        url: currentResourceUrl
+                    };
+                    sessionStorage.setItem('resumeState', JSON.stringify(resumeState));
+
+                    const instruccionId = diagnosis.instruccion_sugerida;
+                    const redirectUrl = `/templates/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}`;
+                    window.location.href = redirectUrl;
+                    return; 
                 } else {
-                    console.log('CONDICIÓN NO CUMPLIDA. No se requiere redirección.');
+                    console.log('CONDICIÓN NO CUMPLIDA. No se redirige.');
                 }
             } else {
                 console.log('La respuesta no contenía un diagnóstico válido en "diagnostico_detallado_ia".');
@@ -671,73 +679,46 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // Leer parámetros de URL
-    const params = new URLSearchParams(window.location.search);
-    sesionId = params.get('sesion_id');
-    currentActivityType = params.get('tipo');
-    currentResourceName = params.get('nombre');
-    currentResourceUrl = params.get('url'); // Para videos o URLs externas
-    
-    // Si es un PDF local, la URL está en sessionStorage
-    if (currentActivityType === 'pdf' && !currentResourceUrl) {
-        currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
-        sessionStorage.removeItem('pdfDataUrl'); // Limpiar para no reusar
-    }
+    const resumeStateJSON = sessionStorage.getItem('resumeState');
+    if (resumeStateJSON) {
+        console.log("Detectado estado para reanudar sesión.");
+        const resumeState = JSON.parse(resumeStateJSON);
+        sessionStorage.removeItem('resumeState');
 
-    console.log('Parámetros de URL recibidos:', {
-        sesionId,
-        currentActivityType,
-        currentResourceName,
-        currentResourceUrl: currentResourceUrl ? currentResourceUrl.substring(0, 50) + '...' : 'null' // No loguear toda la data URL
-    });
+        sesionId = resumeState.sesion_id;
+        currentActivityType = resumeState.tipo;
+        currentResourceName = resumeState.nombre;
+        currentResourceUrl = resumeState.url;
 
-    if (!sesionId || !currentActivityType || !currentResourceName) {
-        alert('Sesión no válida. Redirigiendo...');
-        window.location.href = 'seleccionar_actividad.html';
-        return;
-    }
+        const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
+        if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
+        
+        cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
+        startCamera(true); // Reanudar sin calibración
 
-    // Mostrar información de sesión
-    const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
-    sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
+    } else {
+        console.log("Iniciando nueva sesión desde parámetros de URL.");
+        const params = new URLSearchParams(window.location.search);
+        sesionId = params.get('sesion_id');
+        currentActivityType = params.get('tipo');
+        currentResourceName = params.get('nombre');
+        currentResourceUrl = params.get('url');
+        
+        if (currentActivityType === 'pdf' && !currentResourceUrl) {
+            currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
+            sessionStorage.removeItem('pdfDataUrl'); 
+        }
 
-    // Cargar contenido en el panel
-    cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
+        if (!sesionId || !currentActivityType || !currentResourceName) {
+            alert('Sesión no válida. Redirigiendo...');
+            window.location.href = 'seleccionar_actividad.html';
+            return;
+        }
 
-    // --- LÓGICA DEL MODAL DE RECOMENDACIÓN ---
-    
-    const btnConfirm = document.getElementById('btnConfirmRecommendation');
-    const btnReject = document.getElementById('btnRejectRecommendation');
+        const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
+        if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
 
-    // BOTÓN SÍ: Detener cámara y redirigir
-    if (btnConfirm) {
-        btnConfirm.addEventListener('click', () => {
-            if (pendingRedirectUrl) {
-                console.log('Usuario aceptó la recomendación. Redirigiendo...');
-                stopCamera(); // Detenemos la cámara antes de irnos
-                window.location.href = pendingRedirectUrl;
-            }
-        });
-    }
-
-    // BOTÓN NO: Solo cerrar el modal y limpiar bandera
-    if (btnReject) {
-        btnReject.addEventListener('click', () => {
-            console.log('Usuario rechazó la recomendación. Continuando sesión...');
-            isRecommendationModalOpen = false;
-            pendingRedirectUrl = null;
-            
-            // Opcional: Dar un tiempo de gracia para no volver a preguntar inmediatamente
-            // (por ejemplo, reseteando lastAlertTime o metricsLastSent si fuera necesario)
-        });
-    }
-    
-    // Detectar cuando el modal se cierra por cualquier otra razón (clic afuera)
-    const modalEl = document.getElementById('recommendationModal');
-    if (modalEl) {
-        modalEl.addEventListener('hidden.bs.modal', () => {
-            isRecommendationModalOpen = false;
-        });
+        cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
     }
 });
 

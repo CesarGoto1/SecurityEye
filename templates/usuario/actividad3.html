@@ -133,9 +133,10 @@
   }
 
   function finishActivity() {
-    // Redirigir a la medición FINAL pasando el parámetro
-    window.location.href = 'medicion_fatiga.html?tipo=final'; 
-}
+    // Redirige de vuelta a la página de monitoreo.
+    // El script de monitoreo.js se encargará de reanudar la sesión.
+    window.location.href = '/templates/usuario/monitoreo.html';
+  }
 </script>
 
 </body>
