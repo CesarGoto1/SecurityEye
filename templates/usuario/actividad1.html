@@ -163,10 +163,10 @@
     }
 
     function finishActivity() {
-        // Preservar sesion_id
+        // Redirige de vuelta a la página de monitoreo.
         const params = new URLSearchParams(window.location.search);
         const sesionId = params.get('sesion_id');
-        const nextUrl = sesionId ? `instruccion2.html?sesion_id=${sesionId}` : 'instruccion2.html';
+        const nextUrl = sesionId ? `/usuario/monitoreo.html?sesion_id=${sesionId}` : '/usuario/monitoreo.html';
         window.location.href = nextUrl; 
     }
 

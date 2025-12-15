@@ -153,18 +153,11 @@
     }
 
     function finishActivity() {
-        // Preservar sesion_id y redirigir
+        // Redirige de vuelta a la página de monitoreo.
         const params = new URLSearchParams(window.location.search);
         const sesionId = params.get('sesion_id');
-        
-        // Normalmente regresamos al monitoreo o a una medición final
-        // Puedes cambiar 'medicion_fatiga.html?tipo=final' por '/usuario/monitoreo.html' si prefieres volver al video
-        const baseUrl = 'medicion_fatiga.html'; 
-        const nextUrl = sesionId 
-            ? `${baseUrl}?tipo=final&sesion_id=${sesionId}` 
-            : `${baseUrl}?tipo=final`;
-            
-        window.location.href = nextUrl; 
+        const nextUrl = sesionId ? `/usuario/monitoreo.html?sesion_id=${sesionId}` : '/usuario/monitoreo.html';
+        window.location.href = nextUrl;
     }
 </script>
 
