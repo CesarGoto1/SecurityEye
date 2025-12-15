@@ -93,12 +93,12 @@ class FatigueResult(BaseModel):
     tiempo_cierre: float
     num_bostezos: int
     velocidad_ocular: float
-    nivel_subjetivo: int
     es_fatiga: bool
     tiempo_total_seg: int
     max_sin_parpadeo: int
     alertas: int
     momentos_fatiga: list = []
+    kss_final: int | None = None
 
 class ActividadDescanso(BaseModel):
     id: int
@@ -318,20 +318,26 @@ async def save_fatigue(data: FatigueResult):
             INSERT INTO mediciones (
                 sesion_id, actividad, parpadeos, blink_rate_min, perclos, ear_promedio, pct_incompletos,
                 tiempo_cierre, num_bostezos, velocidad_ocular,
-                nivel_subjetivo, nivel_fatiga, estado_fatiga, max_sin_parpadeo, alertas, momentos_fatiga
-            ) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s )
+                nivel_fatiga, estado_fatiga, max_sin_parpadeo, alertas, momentos_fatiga
+            ) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s )
         """
         cur.execute(query, (
             sesion_id, data.actividad, data.sebr, data.blink_rate_min, data.perclos, data.ear_promedio,
             data.pct_incompletos, data.tiempo_cierre, data.num_bostezos, data.velocidad_ocular,
-            data.nivel_subjetivo, nivel_val, estado_txt, data.max_sin_parpadeo, data.alertas, momentos_json,
+            nivel_val, estado_txt, data.max_sin_parpadeo, data.alertas, momentos_json,
         ))
 
-        # Actualizar sesión con el último tiempo total
-        cur.execute(
-            "UPDATE sesiones SET total_segundos = %s, alertas = %s WHERE id = %s",
-            (data.tiempo_total_seg, data.alertas, sesion_id)
-        )
+        # Actualizar sesión con el último tiempo total y kss_final si está presente
+        if data.kss_final is not None:
+            cur.execute(
+                "UPDATE sesiones SET total_segundos = %s, alertas = %s, kss_final = %s WHERE id = %s",
+                (data.tiempo_total_seg, data.alertas, data.kss_final, sesion_id)
+            )
+        else:
+            cur.execute(
+                "UPDATE sesiones SET total_segundos = %s, alertas = %s WHERE id = %s",
+                (data.tiempo_total_seg, data.alertas, sesion_id)
+            )
         
         # --- Llamada a N8N para diagnóstico ---
         try:
@@ -349,7 +355,6 @@ async def save_fatigue(data: FatigueResult):
                     "num_bostezos": data.num_bostezos,
                     "tiempo_cierre": float(data.tiempo_cierre),
                     "velocidad_ocular": float(data.velocidad_ocular),
-                    "nivel_subjetivo": data.nivel_subjetivo,
                     "es_fatiga": data.es_fatiga,
                     "tiempo_total_seg": data.tiempo_total_seg,
                     "max_sin_parpadeo": data.max_sin_parpadeo,
