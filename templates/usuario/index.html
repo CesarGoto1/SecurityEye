@@ -34,53 +34,91 @@
 
 <main class="container py-5">
     <div class="row g-4 align-items-stretch justify-content-center hero-row">
+
+        <!-- PANEL IZQUIERDO -->
         <div class="col-lg-6">
-            <div class="dashboard-box p-4 h-100">
-                <div class="d-flex align-items-center mb-3">
-                    <i class="bi bi-eye text-primary fs-3 me-2"></i>
-                    <h2 class="fw-bold mb-0">Bienvenido</h2>
+            <div class="dashboard-box p-4 h-100 d-flex flex-column justify-content-between">
+                
+                <div>
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="bi bi-eye text-primary fs-2 me-2"></i>
+                        <h2 class="fw-bold mb-0">Bienvenido</h2>
+                    </div>
+
+                    <p class="text-muted mb-4">
+                        Desde aquí puedes iniciar una nueva sesión de monitoreo visual
+                        o consultar el historial de evaluaciones realizadas.
+                    </p>
                 </div>
-                <p class="text-muted mb-3">Inicia una nueva sesión de monitoreo o revisa el historial de tus evaluaciones previas.</p>
-                <div class="row row-cols-2 row-cols-sm-3 g-2 mb-3">
-                    <div class="col">
-                        <div class="badge bg-light text-secondary w-100 py-2 border">Última sesión<br><span class="fw-semibold text-dark">--</span></div>
-                    </div>
-                    <div class="col">
-                        <div class="badge bg-light text-secondary w-100 py-2 border">Prom. fatiga<br><span class="fw-semibold text-dark">--%</span></div>
-                    </div>
-                    <div class="col">
-                        <div class="badge bg-light text-secondary w-100 py-2 border">Sesiones<br><span class="fw-semibold text-dark">--</span></div>
-                    </div>
-                </div>
-                <div class="d-flex flex-column flex-sm-row gap-3">
-                    <a href="seleccionar_actividad.html" class="text-decoration-none w-100">
-                        <button class="btn-actividades w-100">Iniciar sesión de monitoreo</button>
+
+                <!-- BOTONES UNIFORMES -->
+                <div class="d-grid gap-3">
+                    <a href="seleccionar_actividad.html" class="text-decoration-none">
+                        <button class="btn-actividades w-100 py-3 fw-semibold">
+                            <i class="bi bi-play-fill me-2"></i>
+                            Iniciar sesión de monitoreo
+                        </button>
                     </a>
-                    <a href="historial.html" class="text-decoration-none w-100">
-                        <button class="btn-actividades outline w-100">Ver historial</button>
+
+                    <a href="historial.html" class="text-decoration-none">
+                        <button class="btn-actividades outline w-100 py-3 fw-semibold">
+                            <i class="bi bi-clock-history me-2"></i>
+                            Ver historial
+                        </button>
                     </a>
                 </div>
+
             </div>
         </div>
+
+        <!-- PANEL DERECHO -->
         <div class="col-lg-5">
             <div class="dashboard-box p-4 h-100">
-                <h5 class="fw-bold mb-3">Accesos rápidos</h5>
-                <ul class="list-unstyled mb-0">
-                    <li class="d-flex align-items-center mb-2">
-                        <i class="bi bi-play-circle text-primary me-2"></i>
-                        <span>Empieza una medición inicial para registrar tu estado actual.</span>
-                    </li>
-                    <li class="d-flex align-items-center mb-2">
-                        <i class="bi bi-clock-history text-primary me-2"></i>
-                        <span>Consulta tu historial completo en la sección de historial.</span>
-                    </li>
-                    <li class="d-flex align-items-center">
-                        <i class="bi bi-shield-check text-primary me-2"></i>
-                        <span>Tu sesión se mantiene protegida mientras navegas.</span>
-                    </li>
-                </ul>
+                
+                <h5 class="fw-bold mb-4 text-center">
+                    ¿Qué puedes hacer aquí?
+                </h5>
+
+                <div class="d-flex flex-column gap-4">
+
+                    <div class="d-flex align-items-start">
+                        <i class="bi bi-activity text-primary fs-2 me-3"></i>
+                        <div>
+                            <h6 class="fw-semibold mb-1">Monitoreo visual</h6>
+                            <p class="text-muted mb-0">
+                                Inicia una medición para analizar tu nivel de fatiga visual
+                                mientras trabajas frente al computador.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-start">
+                        <i class="bi bi-bar-chart-line text-primary fs-2 me-3"></i>
+                        <div>
+                            <h6 class="fw-semibold mb-1">Historial de resultados</h6>
+                            <p class="text-muted mb-0">
+                                Revisa todas tus mediciones previas y analiza tu evolución
+                                a lo largo del tiempo.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-start">
+                        <i class="bi bi-lock-fill text-primary fs-2 me-3"></i>
+                        <div>
+                            <h6 class="fw-semibold mb-1">Sesión segura</h6>
+                            <p class="text-muted mb-0">
+                                Tu información y tus sesiones están protegidas
+                                durante toda la navegación.
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+
             </div>
         </div>
+
     </div>
 </main>
 

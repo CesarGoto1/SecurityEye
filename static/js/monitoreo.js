@@ -29,6 +29,12 @@ const alertsCountEl = document.getElementById('alertsCount');
 const contentContainer = document.getElementById('contentContainer');
 const sessionInfoEl = document.getElementById('sessionInfo');
 
+// PDF.js state
+let pdfDoc = null,
+    pageNum = 1,
+    pageRendering = false,
+    pageNumPending = null;
+
 // Estado global y variables
 let appState = 'IDLE';
 let running = false;
@@ -41,10 +47,15 @@ let currentActivityType = null;
 let currentResourceUrl = null;
 let currentResourceName = null;
 
+// Variables para el flujo de recomendación IA
+let pendingRedirectUrl = null;
+let isRecommendationModalOpen = false;
+
+
 // Constantes y umbrales
 const CALIBRATION_DURATION = 10;
 const ALERT_COOLDOWN = 30;
-const METRIC_PUSH_INTERVAL = 5;
+const METRIC_PUSH_INTERVAL = 60;
 let calibrationEARs = [];
 let calibrationMARs = [];
 let baselineEAR = 0;
@@ -209,7 +220,7 @@ faceMesh.onResults((results) => {
             } else if (currentEAR > thresOpen && isBlinking) {
 
                 blinkCounter++;
-                blinkCountEl.textContent = blinkCounter;
+                if (blinkCountEl) blinkCountEl.textContent = blinkCounter;
                 lastBlinkTime = now;
 
                 if (minEarInBlink > (thresClose * 0.7)) {
@@ -225,7 +236,6 @@ faceMesh.onResults((results) => {
             const sinParpadeo = now - lastBlinkTime;
             if (sinParpadeo > maxSinParpadeo) {
                 maxSinParpadeo = sinParpadeo;
-                // maxWithoutBlinkEl removido - no existe en HTML
             }
 
             // -------------------------
@@ -241,7 +251,7 @@ faceMesh.onResults((results) => {
                     const dur = now - yawnStartTime;
                     if (dur > MIN_YAWN_TIME) {
                         yawnCounter++;
-                        yawnCountEl.textContent = yawnCounter;
+                        if (yawnCountEl) yawnCountEl.textContent = yawnCounter;
                     }
                 }
                 isYawning = false;
@@ -266,7 +276,7 @@ faceMesh.onResults((results) => {
             const perclos = measureFramesTotal > 0
                 ? (measureFramesClosed / measureFramesTotal) * 100
                 : 0;
-            perclosEl.textContent = parseFloat(perclos.toFixed(1)) + '%';
+            if (perclosEl) perclosEl.textContent = parseFloat(perclos.toFixed(1)) + '%';
 
             // -------------------------
             // DETECCIÓN DE FATIGA (alineada con medicion.js)
@@ -293,7 +303,7 @@ faceMesh.onResults((results) => {
             if (nivelFatiga >= 3 && (now - lastAlertTime) > ALERT_COOLDOWN) {
                 mostrarAlertaFatiga();
                 alertasCount++;
-                alertsCountEl.textContent = alertasCount;
+                if (alertsCountEl) alertsCountEl.textContent = alertasCount;
                 lastAlertTime = now;
 
                 // Guardar momento de fatiga
@@ -301,7 +311,6 @@ faceMesh.onResults((results) => {
                     t: Math.round(elapsed),
                     reason: nivelFatiga >= 5 ? 'Fatiga severa' : 'Fatiga moderada'
                 });
-
             }
 
             // -------------------------
@@ -377,17 +386,17 @@ async function crearSesion() {
     console.log('Usando sesión existente con ID:', sesionId);
 }
 
+// -------------------------------------------------------------
+// FUNCIÓN CORREGIDA PARA REDIRECCIONAR SEGÚN DIAGNÓSTICO
+// -------------------------------------------------------------
 async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRateMin, avgVelocity }) {
     if (!sesionId) return;
 
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const activityType = currentActivityType;
 
-    // Calcular % de parpadeos incompletos
     const sebr = blinkCounter;
     const pctIncompletos = sebr > 0 ? (incompleteBlinks / sebr) * 100 : 0;
-    
-    // Detectar fatiga (basado en PERCLOS y alertas)
     const esFatiga = perclos >= 15 || alertasCount >= 2;
 
     const payload = {
@@ -396,7 +405,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
         actividad: activityType,
         tiempo_total_seg: Math.round(tiempoTranscurrido),
         perclos: parseFloat(perclos.toFixed(2)),
-        sebr,
+        sebr: sebr,
         blink_rate_min: parseFloat(blinkRateMin.toFixed(2)),
         pct_incompletos: parseFloat(pctIncompletos.toFixed(2)),
         num_bostezos: yawnCounter,
@@ -405,7 +414,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
         max_sin_parpadeo: Math.round(maxSinParpadeo),
         alertas: alertasCount,
         momentos_fatiga: momentosFatiga,
-        nivel_subjetivo: 0, // Se establecerá al final con KSS
+        nivel_subjetivo: 0, 
         es_fatiga: esFatiga
     };
 
@@ -416,8 +425,61 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
             body: JSON.stringify(payload)
         });
 
-        if (!response.ok) {
-            console.warn('Error guardando métricas:', response.status);
+        if (response.ok) {
+            const data = await response.json();
+            console.log("Respuesta recibida del backend:", JSON.stringify(data, null, 2));
+
+            // CORRECCIÓN: Extraer diagnostico_detallado_ia de la respuesta del objeto
+            let diagnosisData = data.diagnostico_detallado_ia;
+            let diagnosis = null;
+
+            // Manejar si viene como Array (común en N8N) o como Objeto único
+            if (diagnosisData) {
+                if (Array.isArray(diagnosisData) && diagnosisData.length > 0) {
+                    diagnosis = diagnosisData[0];
+                } else if (typeof diagnosisData === 'object') {
+                    diagnosis = diagnosisData;
+                }
+            }
+
+            if (diagnosis) {
+                console.log("Diagnóstico extraído:", JSON.stringify(diagnosis, null, 2));
+
+                const nivelFatigaLimpio = diagnosis.nivel_fatiga ? diagnosis.nivel_fatiga.trim() : '';
+
+                console.log(`DEBUG: Comparando nivel_fatiga: '${nivelFatigaLimpio}' === 'Crítico'`);
+                console.log(`DEBUG: Valor de instruccion_sugerida: ${diagnosis.instruccion_sugerida}`);
+
+                if (nivelFatigaLimpio === 'Crítico' && diagnosis.instruccion_sugerida) {
+                    console.log('CONDICIÓN CUMPLIDA. Solicitando confirmación al usuario...');
+                    
+                    // 1. Construimos la URL pero NO redirigimos todavía
+                    const instruccionId = diagnosis.instruccion_sugerida;
+                    pendingRedirectUrl = `/templates/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}`;
+                    
+                    // 2. Preparamos el mensaje del modal (opcional, si el back trae un mensaje breve)
+                    const razonEl = document.getElementById('recommendationReason');
+                    if (razonEl) {
+                        // Si el backend devuelve un 'diagnostico_breve', úsalo, si no, texto genérico
+                        razonEl.textContent = diagnosis.diagnostico_breve || "Tus métricas oculares sugieren que necesitas una pausa inmediata.";
+                    }
+
+                    // 3. Abrimos el modal si no está abierto ya
+                    if (!isRecommendationModalOpen) {
+                        const recModal = new bootstrap.Modal(document.getElementById('recommendationModal'));
+                        recModal.show();
+                        isRecommendationModalOpen = true;
+                    }
+                    
+                    return; // Salimos de la función sin redirigir
+                } else {
+                    console.log('CONDICIÓN NO CUMPLIDA. No se requiere redirección.');
+                }
+            } else {
+                console.log('La respuesta no contenía un diagnóstico válido en "diagnostico_detallado_ia".');
+            }
+        } else {
+            console.warn('Error guardando métricas:', response.status, await response.text());
         }
     } catch (e) {
         console.error('Error al guardar métricas continuas:', e);
@@ -507,13 +569,17 @@ function mostrarModalKSS() {
 }
 
 function mostrarAlertaFatiga() {
-    alertBanner.classList.remove('d-none');
-    alertText.textContent = 'Fatiga detectada - Se recomienda descanso';
-    
-    // Auto-ocultar después de 5 segundos
-    setTimeout(() => {
-        alertBanner.classList.add('d-none');
-    }, 5000);
+    if (alertBanner && alertText) {
+        alertBanner.classList.remove('d-none');
+        alertText.textContent = 'Fatiga detectada - Se recomienda descanso';
+        
+        // Auto-ocultar después de 5 segundos
+        setTimeout(() => {
+            alertBanner.classList.add('d-none');
+        }, 5000);
+    } else {
+        console.log('Alerta de fatiga generada (Contador incrementado). El elemento visual #alertBanner no existe en el HTML.');
+    }
 }
 
 async function abrirModalDescanso() {
@@ -593,6 +659,11 @@ document.getElementById('breakBtn3')?.addEventListener('click', () => abrirModal
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Configurar PDF.js worker
+    if (typeof pdfjsLib !== 'undefined') {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+
     // Protección de ruta
     const usuario = localStorage.getItem('usuario');
     if (!usuario) {
@@ -605,13 +676,19 @@ document.addEventListener('DOMContentLoaded', () => {
     sesionId = params.get('sesion_id');
     currentActivityType = params.get('tipo');
     currentResourceName = params.get('nombre');
-    currentResourceUrl = params.get('url');
+    currentResourceUrl = params.get('url'); // Para videos o URLs externas
     
+    // Si es un PDF local, la URL está en sessionStorage
+    if (currentActivityType === 'pdf' && !currentResourceUrl) {
+        currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
+        sessionStorage.removeItem('pdfDataUrl'); // Limpiar para no reusar
+    }
+
     console.log('Parámetros de URL recibidos:', {
         sesionId,
         currentActivityType,
         currentResourceName,
-        currentResourceUrl
+        currentResourceUrl: currentResourceUrl ? currentResourceUrl.substring(0, 50) + '...' : 'null' // No loguear toda la data URL
     });
 
     if (!sesionId || !currentActivityType || !currentResourceName) {
@@ -626,11 +703,116 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Cargar contenido en el panel
     cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
+
+    // --- LÓGICA DEL MODAL DE RECOMENDACIÓN ---
+    
+    const btnConfirm = document.getElementById('btnConfirmRecommendation');
+    const btnReject = document.getElementById('btnRejectRecommendation');
+
+    // BOTÓN SÍ: Detener cámara y redirigir
+    if (btnConfirm) {
+        btnConfirm.addEventListener('click', () => {
+            if (pendingRedirectUrl) {
+                console.log('Usuario aceptó la recomendación. Redirigiendo...');
+                stopCamera(); // Detenemos la cámara antes de irnos
+                window.location.href = pendingRedirectUrl;
+            }
+        });
+    }
+
+    // BOTÓN NO: Solo cerrar el modal y limpiar bandera
+    if (btnReject) {
+        btnReject.addEventListener('click', () => {
+            console.log('Usuario rechazó la recomendación. Continuando sesión...');
+            isRecommendationModalOpen = false;
+            pendingRedirectUrl = null;
+            
+            // Opcional: Dar un tiempo de gracia para no volver a preguntar inmediatamente
+            // (por ejemplo, reseteando lastAlertTime o metricsLastSent si fuera necesario)
+        });
+    }
+    
+    // Detectar cuando el modal se cierra por cualquier otra razón (clic afuera)
+    const modalEl = document.getElementById('recommendationModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            isRecommendationModalOpen = false;
+        });
+    }
 });
 
 // ==========================================
 // 8. CARGAR CONTENIDO (VIDEO/PDF)
 // ==========================================
+
+/**
+ * Renderiza una página del PDF.
+ * @param {number} num El número de la página a renderizar.
+ */
+function renderPage(num) {
+    pageRendering = true;
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const pageNumEl = document.getElementById('page-num');
+    const container = canvas.parentElement; // El div que contiene el canvas
+
+    // Usar la página del documento PDF
+    pdfDoc.getPage(num).then(page => {
+        // Calcular la escala para ajustar al ancho del contenedor
+        const desiredWidth = container.clientWidth;
+        const viewportAtScale1 = page.getViewport({ scale: 1 });
+        const scale = desiredWidth / viewportAtScale1.width;
+        const viewport = page.getViewport({ scale: scale });
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        // Renderizar página PDF en el contexto del canvas
+        const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+        };
+        const renderTask = page.render(renderContext);
+
+        // Esperar a que se complete el renderizado
+        renderTask.promise.then(() => {
+            pageRendering = false;
+            if (pageNumPending !== null) {
+                // Hay una nueva página esperando ser renderizada
+                renderPage(pageNumPending);
+                pageNumPending = null;
+            }
+        });
+    });
+
+    // Actualizar contador de página
+    pageNumEl.textContent = num;
+}
+
+/**
+ * Si otra página está siendo renderizada, esperar. Si no, renderizarla de inmediato.
+ */
+function queueRenderPage(num) {
+    if (pageRendering) {
+        pageNumPending = num;
+    } else {
+        renderPage(num);
+    }
+}
+
+/** Ir a la página anterior. */
+function onPrevPage() {
+    if (pageNum <= 1) return;
+    pageNum--;
+    queueRenderPage(pageNum);
+}
+
+/** Ir a la página siguiente. */
+function onNextPage() {
+    if (pageNum >= pdfDoc.numPages) return;
+    pageNum++;
+    queueRenderPage(pageNum);
+}
 
 // Helper: Convertir URL de YouTube a formato embed
 function convertirYouTubeUrl(url) {
@@ -656,17 +838,13 @@ function cargarContenido(tipo, url, nombre) {
 
     if (tipo === 'video') {
         if (hasUrl) {
-            console.log('Creando elemento video con URL:', url);
-            
-            // Detectar si es URL de YouTube o externa
+            // ... (código de video sin cambios)
             const esYouTube = url.includes('youtube.com') || url.includes('youtu.be');
             const esUrlExterna = url.startsWith('http://') || url.startsWith('https://');
             const esArchivoLocal = url.startsWith('blob:');
             
             if (esYouTube) {
-                // YouTube requiere iframe con URL embed
                 const embedUrl = convertirYouTubeUrl(url);
-                console.log('URL de YouTube convertida a embed:', embedUrl);
                 const iframe = document.createElement('iframe');
                 iframe.src = embedUrl;
                 iframe.style.width = '100%';
@@ -676,8 +854,6 @@ function cargarContenido(tipo, url, nombre) {
                 iframe.allowFullscreen = true;
                 contentContainer.appendChild(iframe);
             } else if (esUrlExterna && !esArchivoLocal) {
-                // Otras URLs externas también usar iframe por seguridad
-                console.log('URL externa, usando iframe');
                 const iframe = document.createElement('iframe');
                 iframe.src = url;
                 iframe.style.width = '100%';
@@ -686,8 +862,6 @@ function cargarContenido(tipo, url, nombre) {
                 iframe.allow = 'autoplay';
                 contentContainer.appendChild(iframe);
             } else {
-                // Archivos locales (blob:) usar <video>
-                console.log('Archivo local, usando elemento video');
                 const videoEl = document.createElement('video');
                 videoEl.src = url;
                 videoEl.controls = true;
@@ -698,7 +872,6 @@ function cargarContenido(tipo, url, nombre) {
                 contentContainer.appendChild(videoEl);
             }
         } else {
-            console.warn('No se proporcionó URL para el video');
             contentContainer.innerHTML = `<div class="text-center text-white p-4">
                 <i class="bi bi-film fs-1 d-block mb-2"></i>
                 <p class="mb-0">${nombre}</p>
@@ -707,15 +880,40 @@ function cargarContenido(tipo, url, nombre) {
         }
     } else if (tipo === 'pdf') {
         if (hasUrl) {
-            console.log('Creando iframe para PDF con URL:', url);
-            const iframe = document.createElement('iframe');
-            iframe.src = url;
-            iframe.style.width = '100%';
-            iframe.style.height = '100%';
-            iframe.style.border = 'none';
-            contentContainer.appendChild(iframe);
+            // Crear la estructura del visor de PDF
+            contentContainer.innerHTML = `
+                <div id="pdf-viewer" style="width: 100%; height: 100%; display: flex; flex-direction: column;">
+                    <div id="pdf-controls" class="d-flex justify-content-center align-items-center p-2 bg-dark text-white gap-3">
+                        <button id="prev-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left"></i></button>
+                        <span>Página: <span id="page-num">0</span> / <span id="page-count">0</span></span>
+                        <button id="next-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-right"></i></button>
+                    </div>
+                    <div style="flex-grow: 1; overflow: auto; text-align: center;">
+                        <canvas id="pdf-canvas"></canvas>
+                    </div>
+                </div>
+            `;
+
+            // Agregar listeners a los botones
+            document.getElementById('prev-page').addEventListener('click', onPrevPage);
+            document.getElementById('next-page').addEventListener('click', onNextPage);
+            
+            // Cargar el documento PDF
+            pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
+                pdfDoc = pdfDoc_;
+                document.getElementById('page-count').textContent = pdfDoc.numPages;
+                pageNum = 1;
+                renderPage(pageNum);
+            }).catch(err => {
+                console.error('Error al cargar el PDF:', err);
+                contentContainer.innerHTML = `<div class="text-center text-danger p-4">
+                    <i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i>
+                    <p class="mb-0">Error al cargar el PDF.</p>
+                    <small class="text-muted">${err.message}</small>
+                </div>`;
+            });
+
         } else {
-            console.warn('No se proporcionó URL para el PDF');
             contentContainer.innerHTML = `<div class="text-center text-white p-4">
                 <i class="bi bi-file-earmark-pdf fs-1 d-block mb-2"></i>
                 <p class="mb-0">${nombre}</p>

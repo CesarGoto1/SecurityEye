@@ -65,10 +65,30 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await resp.json();
       const sesionId = data.sesion_id;
 
-      // Si hay archivo local, crear URL temporal
+      // Gestionar URL del recurso
       let resourceUrl = url;
       if (file && !url) {
-        resourceUrl = URL.createObjectURL(file);
+        // Para archivos PDF, leer como DataURL y guardar en sessionStorage
+        // para evitar problemas de seguridad con blob: URLs en la siguiente página.
+        if (tipo === 'pdf') {
+          try {
+            const fileDataUrl = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = e => resolve(e.target.result);
+              reader.onerror = e => reject(new Error('No se pudo leer el archivo.'));
+              reader.readAsDataURL(file);
+            });
+            sessionStorage.setItem('pdfDataUrl', fileDataUrl);
+            resourceUrl = ''; // No pasar la URL en el parámetro
+          } catch (fileError) {
+            console.error(fileError);
+            alert(fileError.message);
+            return;
+          }
+        } else {
+          // Mantener el comportamiento original para videos
+          resourceUrl = URL.createObjectURL(file);
+        }
       }
 
       // Redirigir a monitoreo con parámetros
@@ -76,8 +96,12 @@ document.addEventListener('DOMContentLoaded', () => {
         sesion_id: sesionId,
         tipo: tipo,
         nombre: nombre,
-        url: resourceUrl || ''
       });
+
+      // Solo añadir URL si no es un PDF local (ya guardado en session)
+      if (resourceUrl) {
+        params.append('url', resourceUrl);
+      }
 
       window.location.href = `monitoreo.html?${params.toString()}`;
 

@@ -75,7 +75,7 @@ def startup():
             "port": int(os.getenv("DB_PORT", "5432")),
             "database": os.getenv("DB_NAME", "pry_lectura1"),
             "user": os.getenv("DB_USER", "postgres"),
-            "password": os.getenv("DB_PASS", "admin"),
+            "password": os.getenv("DB_PASS", "123"),
         }
         app.state.db_pool = pool.SimpleConnectionPool(1, 10, **db_config)
         log.info("Conexión a base de datos establecida.")
