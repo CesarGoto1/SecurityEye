@@ -354,19 +354,34 @@ function startCamera(isResuming = false) {
         if (statusOverlay) statusOverlay.classList.add('d-none');
         
         lastFrameTime = performance.now() / 1000;
-        metricsLastSent = 0;
+        // metricsLastSent ya se restaura en DOMContentLoaded o se inicializa a 0 si es sesión nueva.
         
         if (isResuming) {
-            console.log("Reanudando sesión de monitoreo...");
+            console.log("Reanudando sesión de monitoreo (manteniendo startTime y métricas).");
             appState = 'MONITORING';
-            startTime = performance.now() / 1000;
-            lastBlinkTime = startTime;
-        } else {
+            // startTime ya fue ajustado en DOMContentLoaded, no lo sobrescribimos aquí.
+            // lastBlinkTime también debería haber sido restaurado en DOMContentLoaded.
+
+        } else { // Si es una sesión completamente nueva
             appState = 'CALIBRATING';
-            startTime = performance.now() / 1000;
+            startTime = performance.now() / 1000; // Aquí sí se inicializa para una sesión nueva
+            lastBlinkTime = startTime; // Inicializar lastBlinkTime para nueva sesión
             calibrationEARs = [];
             calibrationMARs = [];
             crearSesion();
+            // Inicializar todas las métricas a cero para una sesión nueva
+            blinkCounter = 0;
+            incompleteBlinks = 0;
+            accumulatedClosureTime = 0;
+            measureFramesTotal = 0;
+            measureFramesClosed = 0;
+            yawnCounter = 0;
+            totalIrisDistance = 0;
+            frameCount = 0;
+            alertasCount = 0;
+            momentosFatiga = [];
+            metricsLastSent = 0;
+            maxSinParpadeo = 0;
         }
     });
 }
@@ -610,15 +625,31 @@ async function realizarActividadDescanso(actividad) {
 }
 
 window.addEventListener('beforeunload', () => {
-    if (sesionId && running && appState === 'MONITORING') { // Only save if actively monitoring
+    if (sesionId && running && appState === 'MONITORING') {
+        const elapsed = (performance.now() / 1000) - startTime; // Calcular el tiempo transcurrido total
         const activeSessionState = {
             sesion_id: sesionId,
             tipo: currentActivityType,
             nombre: currentResourceName,
-            url: currentResourceUrl
+            url: currentResourceUrl,
+            // --- MÉTRICAS Y ESTADO A GUARDAR ---
+            elapsedTime: elapsed, // Tiempo transcurrido acumulado
+            blinkCounter: blinkCounter,
+            incompleteBlinks: incompleteBlinks,
+            yawnCounter: yawnCounter,
+            alertasCount: alertasCount,
+            maxSinParpadeo: maxSinParpadeo,
+            momentosFatiga: momentosFatiga,
+            metricsLastSent: metricsLastSent,
+            accumulatedClosureTime: accumulatedClosureTime,
+            measureFramesTotal: measureFramesTotal,
+            measureFramesClosed: measureFramesClosed,
+            totalIrisDistance: totalIrisDistance,
+            frameCount: frameCount,
+            lastBlinkTime: lastBlinkTime // Guardar también el lastBlinkTime
         };
         sessionStorage.setItem('activeMonitoringSession', JSON.stringify(activeSessionState));
-        console.log('Estado de sesión de monitoreo guardado para reanudar.');
+        console.log('Estado de sesión de monitoreo guardado para reanudar.', activeSessionState);
     }
 });
 
@@ -647,30 +678,63 @@ document.addEventListener('DOMContentLoaded', () => {
     const resumeStateJSON = sessionStorage.getItem('resumeState');
     const activeMonitoringSessionJSON = sessionStorage.getItem('activeMonitoringSession'); // NEW
 
+    let sessionToResume = null;
+    let isFromRecommendation = false;
+
     if (resumeStateJSON) {
+        // Redirección desde recomendación de fatiga crítica.
+        // Aquí cargamos los datos básicos para la redirección,
+        // pero las métricas acumuladas deben venir de 'activeMonitoringSession'
+        // que debió guardarse justo antes de la redirección.
+        isFromRecommendation = true;
+        sessionToResume = JSON.parse(resumeStateJSON);
+        sessionStorage.removeItem('resumeState'); // Limpiar resumeState después de usar
         console.log("Detectado estado para reanudar sesión (desde recomendación).");
-        const resumeState = JSON.parse(resumeStateJSON);
-        sessionStorage.removeItem('resumeState'); // Clear after use
-        sesionId = resumeState.sesion_id;
-        currentActivityType = resumeState.tipo;
-        currentResourceName = resumeState.nombre;
-        currentResourceUrl = resumeState.url;
-        const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
-        if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
-        cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
-        startCamera(true);
-    } else if (activeMonitoringSessionJSON) { // NEW: Check for general active session
+    } else if (activeMonitoringSessionJSON) {
+        // Reanudación de una sesión pausada genéricamente
+        sessionToResume = JSON.parse(activeMonitoringSessionJSON);
         console.log("Detectado estado para reanudar sesión (previamente activa).");
-        const activeSessionState = JSON.parse(activeMonitoringSessionJSON);
-        // DO NOT remove activeMonitoringSession here, user might navigate again
-        sesionId = activeSessionState.sesion_id;
-        currentActivityType = activeSessionState.tipo;
-        currentResourceName = activeSessionState.nombre;
-        currentResourceUrl = activeSessionState.url;
+    }
+
+    if (sessionToResume) {
+        sesionId = sessionToResume.sesion_id;
+        currentActivityType = sessionToResume.tipo;
+        currentResourceName = sessionToResume.nombre;
+        currentResourceUrl = sessionToResume.url;
+
+        // --- Restaurar métricas acumuladas ---
+        blinkCounter = sessionToResume.blinkCounter || 0;
+        incompleteBlinks = sessionToResume.incompleteBlinks || 0;
+        yawnCounter = sessionToResume.yawnCounter || 0;
+        alertasCount = sessionToResume.alertasCount || 0;
+        maxSinParpadeo = sessionToResume.maxSinParpadeo || 0;
+        momentosFatiga = sessionToResume.momentosFatiga || [];
+        metricsLastSent = sessionToResume.metricsLastSent || 0;
+        accumulatedClosureTime = sessionToResume.accumulatedClosureTime || 0;
+        measureFramesTotal = sessionToResume.measureFramesTotal || 0;
+        measureFramesClosed = sessionToResume.measureFramesClosed || 0;
+        totalIrisDistance = sessionToResume.totalIrisDistance || 0;
+        frameCount = sessionToResume.frameCount || 0;
+        lastBlinkTime = sessionToResume.lastBlinkTime || 0;
+
+        // Ajustar startTime para que el tiempo total acumulado se mantenga
+        // startTime debe ser el "ahora" menos el tiempo transcurrido total acumulado.
+        startTime = (performance.now() / 1000) - (sessionToResume.elapsedTime || 0);
+
+        // Actualizar la UI inmediatamente
+        if (blinkCountEl) blinkCountEl.textContent = blinkCounter;
+        if (yawnCountEl) yawnCountEl.textContent = yawnCounter;
+        if (alertsCountEl) alertsCountEl.textContent = alertasCount;
+        
+        // Actualizar el timerEl con el tiempo acumulado
+        const minutes = Math.floor((performance.now() / 1000 - startTime) / 60);
+        const seconds = Math.floor((performance.now() / 1000 - startTime) % 60);
+        timerEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
         const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
         if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
         cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
-        startCamera(true); // Resume camera without creating a new session
+        startCamera(true); // Reanudar cámara sin crear una nueva sesión
     } else {
         console.log("Iniciando nueva sesión desde parámetros de URL.");
         const params = new URLSearchParams(window.location.search);

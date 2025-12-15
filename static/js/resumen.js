@@ -92,20 +92,27 @@ async function cargarDatosSesion() {
             `<span class="badge bg-${colorEstado}">${estadoFatiga}</span>`;
 
         // Momentos críticos
-        const momentosRaw = sesionData.momentos_fatiga;
-        let momentos = [];
-        if (momentosRaw) {
-            if (typeof momentosRaw === 'string') {
-                try { momentos = JSON.parse(momentosRaw); } catch { momentos = []; }
-            } else if (Array.isArray(momentosRaw)) {
-                momentos = momentosRaw;
+        if (sesionData.momentos_fatiga) {
+            if (typeof sesionData.momentos_fatiga === 'string') {
+                try { 
+                    sesionData.momentos_fatiga = JSON.parse(sesionData.momentos_fatiga); 
+                } catch { 
+                    sesionData.momentos_fatiga = []; 
+                }
+            } else if (!Array.isArray(sesionData.momentos_fatiga)) {
+                // If it's an object but not an array, treat as empty or log warning
+                console.warn('momentos_fatiga no es un array ni un string JSON válido:', sesionData.momentos_fatiga);
+                sesionData.momentos_fatiga = [];
             }
+        } else {
+            sesionData.momentos_fatiga = []; // Ensure it's always an array for consistency
         }
+        
         document.getElementById('metricCriticalMoments').textContent = 
-            momentos.length;
+            sesionData.momentos_fatiga.length;
 
         // Timeline de alertas
-        construirTimelineAlertas(momentos);
+        construirTimelineAlertas(sesionData.momentos_fatiga);
 
     } catch (e) {
         console.error('Error cargando sesión:', e);
@@ -209,7 +216,7 @@ function construirGraficos() {
     });
 
     // Gráfico de alertas (si hay datos de momentos)
-    const momentos = sesionData.momentos_fatiga ? JSON.parse(sesionData.momentos_fatiga) : [];
+    const momentos = sesionData.momentos_fatiga || [];
     const alertsCtx = document.getElementById('alertsChart').getContext('2d');
     
     const alertReasons = {};
