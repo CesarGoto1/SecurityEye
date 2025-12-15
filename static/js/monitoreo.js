@@ -315,7 +315,7 @@ faceMesh.onResults((results) => {
             }
 
             // -------------------------
-            // GUARDAR MÉTRICAS CADA 5 SEGUNDOS
+            // GUARDAR MÉTRICAS CADA 60 SEGUNDOS
             // -------------------------
             if ((elapsed - metricsLastSent) >= METRIC_PUSH_INTERVAL) {
                 metricsLastSent = elapsed;
@@ -383,8 +383,6 @@ function stopCamera() {
 // ==========================================
 
 async function crearSesion() {
-    // La sesión ya fue creada en seleccionar_actividad.js
-    // Solo verificamos que tengamos los datos necesarios
     if (!sesionId || !currentActivityType) {
         console.error('Faltan datos de sesión');
         alert('Error: Sesión no válida');
@@ -394,18 +392,14 @@ async function crearSesion() {
     console.log('Usando sesión existente con ID:', sesionId);
 }
 
-// -------------------------------------------------------------
-// FUNCIÓN CORREGIDA PARA REDIRECCIONAR SEGÚN DIAGNÓSTICO
-// -------------------------------------------------------------
 async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRateMin, avgVelocity }) {
     if (!sesionId) return;
 
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const activityType = currentActivityType;
 
-    // Calcular EAR promedio para este intervalo
     const ear_promedio = earValues.length > 0 ? earValues.reduce((a, b) => a + b, 0) / earValues.length : 0;
-    earValues = []; // Resetear para el próximo intervalo
+    earValues = []; 
 
     const sebr = blinkCounter;
     const pctIncompletos = sebr > 0 ? (incompleteBlinks / sebr) * 100 : 0;
@@ -418,7 +412,7 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
         tiempo_total_seg: Math.round(tiempoTranscurrido),
         perclos: parseFloat(perclos.toFixed(2)),
         sebr: sebr,
-        ear_promedio: parseFloat(ear_promedio.toFixed(4)), // Añadir EAR promedio
+        ear_promedio: parseFloat(ear_promedio.toFixed(4)),
         blink_rate_min: parseFloat(blinkRateMin.toFixed(2)),
         pct_incompletos: parseFloat(pctIncompletos.toFixed(2)),
         num_bostezos: yawnCounter,
@@ -428,7 +422,6 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
         alertas: alertasCount,
         momentos_fatiga: momentosFatiga,
         es_fatiga: esFatiga
-        // Se elimina 'nivel_subjetivo', ya que no corresponde a este payload intermedio
     };
 
     try {
@@ -440,13 +433,11 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
 
         if (response.ok) {
             const data = await response.json();
-            console.log("Respuesta recibida del backend:", JSON.stringify(data, null, 2));
+            console.log("Respuesta de diagnóstico recibida:", JSON.stringify(data, null, 2));
 
-            // CORRECCIÓN: Extraer diagnostico_detallado_ia de la respuesta del objeto
-            let diagnosisData = data.diagnostico_detallado_ia;
+            let diagnosisData = data.diagnostico;
             let diagnosis = null;
 
-            // Manejar si viene como Array (común en N8N) o como Objeto único
             if (diagnosisData) {
                 if (Array.isArray(diagnosisData) && diagnosisData.length > 0) {
                     diagnosis = diagnosisData[0];
@@ -456,35 +447,27 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
             }
 
             if (diagnosis) {
-                console.log("Diagnóstico extraído:", JSON.stringify(diagnosis, null, 2));
-
                 const nivelFatigaLimpio = diagnosis.nivel_fatiga ? diagnosis.nivel_fatiga.trim() : '';
 
-                console.log(`DEBUG: Comparando nivel_fatiga: '${nivelFatigaLimpio}' === 'Crítico'`);
-                console.log(`DEBUG: Valor de instruccion_sugerida: ${diagnosis.instruccion_sugerida}`);
-
-                if (nivelFatigaLimpio === 'Crítico' && diagnosis.instruccion_sugerida) {
-                    console.log('CONDICIÓN CUMPLIDA. Redirigiendo...');
-                    stopCamera();
-
-                    // Guardar el estado actual para poder reanudar después de la actividad
-                    const resumeState = {
-                        sesion_id: sesionId,
-                        tipo: currentActivityType,
-                        nombre: currentResourceName,
-                        url: currentResourceUrl
-                    };
-                    sessionStorage.setItem('resumeState', JSON.stringify(resumeState));
+                if (nivelFatigaLimpio === 'Crítico' && diagnosis.instruccion_sugerida && !isRecommendationModalOpen) {
+                    console.log('FATIGA CRÍTICA DETECTADA. Mostrando modal de recomendación...');
+                    isRecommendationModalOpen = true;
 
                     const instruccionId = diagnosis.instruccion_sugerida;
-                    const redirectUrl = `/templates/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}`;
-                    window.location.href = redirectUrl;
-                    return; 
-                } else {
-                    console.log('CONDICIÓN NO CUMPLIDA. No se redirige.');
+                    pendingRedirectUrl = `/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}`;
+                    
+                    const reasonEl = document.getElementById('recommendationReason');
+                    if (reasonEl && diagnosis.razon_recomendacion) {
+                        reasonEl.textContent = diagnosis.razon_recomendacion;
+                    }
+
+                    const recommendationModal = new bootstrap.Modal(document.getElementById('recommendationModal'));
+                    recommendationModal.show();
+                } else if (nivelFatigaLimpio !== 'Crítico' || !diagnosis.instruccion_sugerida) {
+                    console.log('Condición de fatiga crítica no cumplida. No se muestra modal.');
                 }
             } else {
-                console.log('La respuesta no contenía un diagnóstico válido en "diagnostico_detallado_ia".');
+                console.log('La respuesta no contenía un diagnóstico válido en la clave "diagnostico".');
             }
         } else {
             console.warn('Error guardando métricas:', response.status, await response.text());
@@ -497,8 +480,6 @@ async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRate
 async function finalizarSesion() {
     stopCamera();
     endSessionBtn.disabled = true;
-
-    // Obtener KSS subjetivo
     mostrarModalKSS();
 }
 
@@ -506,32 +487,18 @@ function mostrarModalKSS() {
     const kssModal = new bootstrap.Modal(document.getElementById('subjectiveModal'));
     kssModal.show();
 
-    // Configurar botones KSS
     document.querySelectorAll('.kss-btn').forEach(btn => {
         btn.onclick = async (e) => {
             const kssValue = e.currentTarget.dataset.kss;
             kssModal.hide();
 
-            // Guardar medición final
             const usuario = JSON.parse(localStorage.getItem('usuario'));
             const activityType = currentActivityType;
             const tiempoTotal = Math.round((performance.now() / 1000) - startTime - (CALIBRATION_DURATION));
-
             const blinkRateMinFinal = tiempoTotal > 0 ? (blinkCounter / (tiempoTotal / 60)) : 0;
-
-            const perclos = measureFramesTotal > 0
-                ? (measureFramesClosed / measureFramesTotal) * 100
-                : 0;
-
-            const pctIncompletos = blinkCounter > 0
-                ? (incompleteBlinks / blinkCounter) * 100
-                : 0;
-
-            const avgVelocity = frameCount > 5
-                ? parseFloat(((totalIrisDistance / frameCount) * 100).toFixed(4))
-                : 0;
-
-            // Detectar fatiga basado en umbrales
+            const perclos = measureFramesTotal > 0 ? (measureFramesClosed / measureFramesTotal) * 100 : 0;
+            const pctIncompletos = blinkCounter > 0 ? (incompleteBlinks / blinkCounter) * 100 : 0;
+            const avgVelocity = frameCount > 5 ? parseFloat(((totalIrisDistance / frameCount) * 100).toFixed(4)) : 0;
             const esFatiga = perclos >= 15 || alertasCount >= 2 || parseInt(kssValue) >= 7;
 
             const payload = {
@@ -563,8 +530,6 @@ function mostrarModalKSS() {
                 });
 
                 if (response.ok) {
-                    // La lógica de finalización ahora está en el backend.
-                    // Simplemente redirigir a la página de resumen.
                     window.location.href = `/usuario/resumen.html?sesion_id=${sesionId}`;
                 } else {
                     alert('Error al guardar la sesión final.');
@@ -582,7 +547,6 @@ function mostrarAlertaFatiga() {
         alertBanner.classList.remove('d-none');
         alertText.textContent = 'Fatiga detectada - Se recomienda descanso';
         
-        // Auto-ocultar después de 5 segundos
         setTimeout(() => {
             alertBanner.classList.add('d-none');
         }, 5000);
@@ -600,11 +564,9 @@ async function abrirModalDescanso() {
     try {
         const response = await fetch('/actividades-descanso');
         const data = await response.json();
-
         const container = document.getElementById('breakActivitiesContainer');
         if (!container) return;
         container.innerHTML = '';
-
         data.actividades.forEach(act => {
             const btn = document.createElement('button');
             btn.className = 'btn btn-outline-primary';
@@ -612,7 +574,6 @@ async function abrirModalDescanso() {
             btn.onclick = () => realizarActividadDescanso(act);
             container.appendChild(btn);
         });
-
         const breakModal = new bootstrap.Modal(modalEl);
         breakModal.show();
     } catch (e) {
@@ -623,7 +584,6 @@ async function abrirModalDescanso() {
 async function realizarActividadDescanso(actividad) {
     console.log('Realizando:', actividad.nombre);
     
-    // Registrar en base de datos
     if (sesionId) {
         try {
             const response = await fetch(`${API_BASE}/registrar-descanso`, {
@@ -636,16 +596,12 @@ async function realizarActividadDescanso(actividad) {
                     duracion_seg: actividad.duracion_seg
                 })
             });
-            
-            if (response.ok) {
-                console.log('Actividad de descanso registrada en BD');
-            }
+            if (response.ok) console.log('Actividad de descanso registrada en BD');
         } catch (e) {
             console.error('Error registrando descanso:', e);
         }
     }
     
-    // Cerrar modal
     const modalEl = document.getElementById('breakActivityModal');
     const breakModal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
     if (breakModal) breakModal.hide();
@@ -658,7 +614,6 @@ async function realizarActividadDescanso(actividad) {
 if (startBtn) startBtn.addEventListener('click', startCamera);
 if (endSessionBtn) endSessionBtn.addEventListener('click', finalizarSesion);
 
-// Botones de actividades de descanso
 document.getElementById('breakBtn1')?.addEventListener('click', () => abrirModalDescanso());
 document.getElementById('breakBtn2')?.addEventListener('click', () => abrirModalDescanso());
 document.getElementById('breakBtn3')?.addEventListener('click', () => abrirModalDescanso());
@@ -668,15 +623,13 @@ document.getElementById('breakBtn3')?.addEventListener('click', () => abrirModal
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Configurar PDF.js worker
     if (typeof pdfjsLib !== 'undefined') {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     }
 
-    // Protección de ruta
     const usuario = localStorage.getItem('usuario');
     if (!usuario) {
-        window.location.href = '/templates/login.html';
+        window.location.href = '/login.html';
         return;
     }
 
@@ -685,18 +638,14 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Detectado estado para reanudar sesión.");
         const resumeState = JSON.parse(resumeStateJSON);
         sessionStorage.removeItem('resumeState');
-
         sesionId = resumeState.sesion_id;
         currentActivityType = resumeState.tipo;
         currentResourceName = resumeState.nombre;
         currentResourceUrl = resumeState.url;
-
         const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
         if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
-        
         cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
-        startCamera(true); // Reanudar sin calibración
-
+        startCamera(true);
     } else {
         console.log("Iniciando nueva sesión desde parámetros de URL.");
         const params = new URLSearchParams(window.location.search);
@@ -718,7 +667,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
         if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
-
         cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
     }
 });
@@ -727,53 +675,36 @@ document.addEventListener('DOMContentLoaded', () => {
 // 8. CARGAR CONTENIDO (VIDEO/PDF)
 // ==========================================
 
-/**
- * Renderiza una página del PDF.
- * @param {number} num El número de la página a renderizar.
- */
 function renderPage(num) {
     pageRendering = true;
     const canvas = document.getElementById('pdf-canvas');
     const ctx = canvas.getContext('2d');
     const pageNumEl = document.getElementById('page-num');
-    const container = canvas.parentElement; // El div que contiene el canvas
+    const container = canvas.parentElement;
 
-    // Usar la página del documento PDF
     pdfDoc.getPage(num).then(page => {
-        // Calcular la escala para ajustar al ancho del contenedor
         const desiredWidth = container.clientWidth;
         const viewportAtScale1 = page.getViewport({ scale: 1 });
         const scale = desiredWidth / viewportAtScale1.width;
         const viewport = page.getViewport({ scale: scale });
-
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
-        // Renderizar página PDF en el contexto del canvas
-        const renderContext = {
-            canvasContext: ctx,
-            viewport: viewport
-        };
+        const renderContext = { canvasContext: ctx, viewport: viewport };
         const renderTask = page.render(renderContext);
 
-        // Esperar a que se complete el renderizado
         renderTask.promise.then(() => {
             pageRendering = false;
             if (pageNumPending !== null) {
-                // Hay una nueva página esperando ser renderizada
                 renderPage(pageNumPending);
                 pageNumPending = null;
             }
         });
     });
 
-    // Actualizar contador de página
     pageNumEl.textContent = num;
 }
 
-/**
- * Si otra página está siendo renderizada, esperar. Si no, renderizarla de inmediato.
- */
 function queueRenderPage(num) {
     if (pageRendering) {
         pageNumPending = num;
@@ -782,66 +713,41 @@ function queueRenderPage(num) {
     }
 }
 
-/** Ir a la página anterior. */
 function onPrevPage() {
     if (pageNum <= 1) return;
     pageNum--;
     queueRenderPage(pageNum);
 }
 
-/** Ir a la página siguiente. */
 function onNextPage() {
     if (pageNum >= pdfDoc.numPages) return;
     pageNum++;
     queueRenderPage(pageNum);
 }
 
-// Helper: Convertir URL de YouTube a formato embed
 function convertirYouTubeUrl(url) {
-    // Detectar URLs de YouTube
     const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})/;
     const match = url.match(youtubeRegex);
-    
-    if (match && match[1]) {
-        const videoId = match[1];
-        return `https://www.youtube.com/embed/${videoId}`;
-    }
-    
-    return url; // Si no es YouTube, devolver URL original
+    if (match && match[1]) return `https://www.youtube.com/embed/${match[1]}`;
+    return url;
 }
 
 function cargarContenido(tipo, url, nombre) {
     console.log('Cargando contenido:', { tipo, url, nombre });
     contentContainer.innerHTML = '';
-
-    // Verificar si hay URL válida (no vacía ni null)
     const hasUrl = url && url.trim() !== '';
-    console.log('Tiene URL válida:', hasUrl);
 
     if (tipo === 'video') {
         if (hasUrl) {
-            // ... (código de video sin cambios)
             const esYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-            const esUrlExterna = url.startsWith('http://') || url.startsWith('https://');
-            const esArchivoLocal = url.startsWith('blob:');
-            
             if (esYouTube) {
-                const embedUrl = convertirYouTubeUrl(url);
                 const iframe = document.createElement('iframe');
-                iframe.src = embedUrl;
+                iframe.src = convertirYouTubeUrl(url);
                 iframe.style.width = '100%';
                 iframe.style.height = '100%';
                 iframe.style.border = 'none';
                 iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
                 iframe.allowFullscreen = true;
-                contentContainer.appendChild(iframe);
-            } else if (esUrlExterna && !esArchivoLocal) {
-                const iframe = document.createElement('iframe');
-                iframe.src = url;
-                iframe.style.width = '100%';
-                iframe.style.height = '100%';
-                iframe.style.border = 'none';
-                iframe.allow = 'autoplay';
                 contentContainer.appendChild(iframe);
             } else {
                 const videoEl = document.createElement('video');
@@ -854,15 +760,10 @@ function cargarContenido(tipo, url, nombre) {
                 contentContainer.appendChild(videoEl);
             }
         } else {
-            contentContainer.innerHTML = `<div class="text-center text-white p-4">
-                <i class="bi bi-film fs-1 d-block mb-2"></i>
-                <p class="mb-0">${nombre}</p>
-                <small class="text-muted">Sin archivo proporcionado</small>
-            </div>`;
+            contentContainer.innerHTML = `<div class="text-center text-white p-4"><i class="bi bi-film fs-1 d-block mb-2"></i><p class="mb-0">${nombre}</p><small class="text-muted">Sin archivo proporcionado</small></div>`;
         }
     } else if (tipo === 'pdf') {
         if (hasUrl) {
-            // Crear la estructura del visor de PDF
             contentContainer.innerHTML = `
                 <div id="pdf-viewer" style="width: 100%; height: 100%; display: flex; flex-direction: column;">
                     <div id="pdf-controls" class="d-flex justify-content-center align-items-center p-2 bg-dark text-white gap-3">
@@ -870,17 +771,10 @@ function cargarContenido(tipo, url, nombre) {
                         <span>Página: <span id="page-num">0</span> / <span id="page-count">0</span></span>
                         <button id="next-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-right"></i></button>
                     </div>
-                    <div style="flex-grow: 1; overflow: auto; text-align: center;">
-                        <canvas id="pdf-canvas"></canvas>
-                    </div>
-                </div>
-            `;
-
-            // Agregar listeners a los botones
+                    <div style="flex-grow: 1; overflow: auto; text-align: center;"><canvas id="pdf-canvas"></canvas></div>
+                </div>`;
             document.getElementById('prev-page').addEventListener('click', onPrevPage);
             document.getElementById('next-page').addEventListener('click', onNextPage);
-            
-            // Cargar el documento PDF
             pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
                 pdfDoc = pdfDoc_;
                 document.getElementById('page-count').textContent = pdfDoc.numPages;
@@ -888,19 +782,38 @@ function cargarContenido(tipo, url, nombre) {
                 renderPage(pageNum);
             }).catch(err => {
                 console.error('Error al cargar el PDF:', err);
-                contentContainer.innerHTML = `<div class="text-center text-danger p-4">
-                    <i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i>
-                    <p class="mb-0">Error al cargar el PDF.</p>
-                    <small class="text-muted">${err.message}</small>
-                </div>`;
+                contentContainer.innerHTML = `<div class="text-center text-danger p-4"><i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i><p class="mb-0">Error al cargar el PDF.</p><small class="text-muted">${err.message}</small></div>`;
             });
-
         } else {
-            contentContainer.innerHTML = `<div class="text-center text-white p-4">
-                <i class="bi bi-file-earmark-pdf fs-1 d-block mb-2"></i>
-                <p class="mb-0">${nombre}</p>
-                <small class="text-muted">Sin archivo proporcionado</small>
-            </div>`;
+            contentContainer.innerHTML = `<div class="text-center text-white p-4"><i class="bi bi-file-earmark-pdf fs-1 d-block mb-2"></i><p class="mb-0">${nombre}</p><small class="text-muted">Sin archivo proporcionado</small></div>`;
         }
     }
+}
+
+// ==========================================
+// 9. MANEJO DEL MODAL DE RECOMENDACIÓN
+// ==========================================
+const confirmBtn = document.getElementById('btnConfirmRecommendation');
+const recommendationModalEl = document.getElementById('recommendationModal');
+
+if (confirmBtn && recommendationModalEl) {
+    confirmBtn.onclick = () => {
+        if (pendingRedirectUrl) {
+            stopCamera();
+            const resumeState = {
+                sesion_id: sesionId,
+                tipo: currentActivityType,
+                nombre: currentResourceName,
+                url: currentResourceUrl
+            };
+            sessionStorage.setItem('resumeState', JSON.stringify(resumeState));
+            window.location.href = pendingRedirectUrl;
+        }
+    };
+
+    recommendationModalEl.addEventListener('hidden.bs.modal', () => {
+        isRecommendationModalOpen = false;
+        pendingRedirectUrl = null;
+        console.log('Modal de recomendación cerrado.');
+    });
 }

@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Protección de ruta
     const usuarioStr = localStorage.getItem('usuario');
     if (!usuarioStr) {
-        window.location.href = '/templates/login.html';
+        window.location.href = '/login.html';
         return;
     }
 
@@ -266,7 +266,7 @@ async function abrirDetalles(sesionId) {
 
         // Configurar link a resumen completo
         document.getElementById('viewResumenLink').href = 
-            `/templates/usuario/resumen.html?sesion_id=${sesionId}`;
+            `/usuario/resumen.html?sesion_id=${sesionId}`;
 
         // Mostrar modal
         const modal = new bootstrap.Modal(document.getElementById('detailModal'));
@@ -285,5 +285,5 @@ async function abrirDetalles(sesionId) {
 function cerrarSesion() {
     localStorage.removeItem('usuario');
     localStorage.removeItem('token');
-    window.location.href = '/templates/login.html';
+    window.location.href = '/login.html';
 }
