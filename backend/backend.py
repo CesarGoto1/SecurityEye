@@ -153,7 +153,18 @@ def _get_conn_from_pool():
     db_pool = getattr(app.state, "db_pool", None)
     if not db_pool:
         raise HTTPException(status_code=500, detail="Conexión BD no disponible")
-    return db_pool.getconn()
+    conn = db_pool.getconn()
+    try:
+        # Establecer el huso horario para esta sesión de conexión
+        # 'America/Guayaquil' es preferible por ser el nombre de la zona horaria.
+        with conn.cursor() as cur:
+            cur.execute("SET TIME ZONE 'America/Guayaquil'")
+        conn.commit() # Necesario para que el SET TIME ZONE sea efectivo en la conexión devuelta
+    except Exception as e:
+        log.error(f"Error al establecer el huso horario en la conexión: {e}")
+        _put_conn_back(conn) # Devolver la conexión si falla
+        raise
+    return conn
 
 def _put_conn_back(conn):
     db_pool = getattr(app.state, "db_pool", None)

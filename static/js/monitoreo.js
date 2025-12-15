@@ -581,20 +581,38 @@ async function cargarYMostrarActividadEnModal(urlActividad, titulo, actividadDat
     activityModal.show();
 
     try {
-        // Fetch el contenido HTML de la actividad
         const response = await fetch(urlActividad);
         if (!response.ok) throw new Error(`No se pudo cargar la actividad: ${urlActividad}`);
         const htmlContent = await response.text();
 
-        // Extraer el body (o una parte específica) y el script del contenido
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlContent, 'text/html');
-        const activityBodyContent = doc.querySelector('.activity-card') || doc.body; // Coger .activity-card si existe, sino todo el body
+        
+        // --- 1. Inyectar estilos ---
+        const headLinks = doc.head.querySelectorAll('link[rel="stylesheet"]');
+        const existingLinks = document.head.querySelectorAll('link[data-activity-css]');
+        
+        // Remover estilos de actividades previas para evitar conflictos
+        existingLinks.forEach(link => link.remove());
 
-        activityModalBody.innerHTML = activityBodyContent.innerHTML;
+        headLinks.forEach(link => {
+            const newLink = document.createElement('link');
+            // Copiar todos los atributos, incluyendo href, rel, etc.
+            Array.from(link.attributes).forEach(attr => {
+                newLink.setAttribute(attr.name, attr.value);
+            });
+            newLink.setAttribute('data-activity-css', 'true'); // Marca para fácil remoción
+            document.head.appendChild(newLink);
+        });
 
-        // Ejecutar scripts dentro del contenido cargado
-        const scripts = activityBodyContent.querySelectorAll('script');
+        // --- 2. Inyectar el contenido HTML ---
+        // Coger el contenido de .activity-card si existe, sino todo el body
+        const activityContent = doc.querySelector('.activity-card') || doc.body; 
+        activityModalBody.innerHTML = activityContent.innerHTML;
+
+        // --- 3. Ejecutar scripts dentro del contenido cargado ---
+        // Importante: Los scripts deben ser re-creados para que el navegador los ejecute.
+        const scripts = activityContent.querySelectorAll('script'); // Seleccionar del contenido inyectado
         scripts.forEach(oldScript => {
             const newScript = document.createElement('script');
             Array.from(oldScript.attributes).forEach(attr => {
@@ -605,7 +623,6 @@ async function cargarYMostrarActividadEnModal(urlActividad, titulo, actividadDat
         });
 
         // Pasar datos de la actividad al script inyectado si es necesario
-        // Esto depende de cómo las actividades manejen sus datos
         if (window.initActivity) { // Si la actividad tiene una función de inicialización
             window.initActivity(actividadData);
         }
@@ -693,6 +710,11 @@ async function realizarActividadDescanso(actividad) {
 activityModalElement.addEventListener('hidden.bs.modal', () => {
     console.log('Modal de actividad cerrado. Reanudando monitoreo.');
     activityModalBody.innerHTML = ''; // Limpiar el contenido del modal
+
+    // --- Remover estilos de actividad inyectados ---
+    const existingLinks = document.head.querySelectorAll('link[data-activity-css]');
+    existingLinks.forEach(link => link.remove());
+
     resumeMonitoring(); // Reanudar el monitoreo
 });
 
