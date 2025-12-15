@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 import json
+import urllib.parse # Importar para parsear la URL de la base de datos
 
 import psycopg2
 from psycopg2 import pool, extras
@@ -24,6 +25,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- SERVIR ARCHIVOS ESTÁTICOS ---
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Montar directorios estáticos
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/templates", StaticFiles(directory="templates"), name="templates")
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return FileResponse("templates/index.html")
+
 
 # --- MODELOS DE DATOS ---
 class Login(BaseModel):
@@ -71,13 +85,27 @@ class DetailRequest(BaseModel):
 @app.on_event("startup")
 def startup():
     try:
-        db_config = {
-            "host": os.getenv("DB_HOST", "127.0.0.1"),
-            "port": int(os.getenv("DB_PORT", "5432")),
-            "database": os.getenv("DB_NAME", "pry_lectura1"),
-            "user": os.getenv("DB_USER", "postgres"),
-            "password": os.getenv("DB_PASS", "123"),
-        }
+        # Priorizar DATABASE_URL si está presente (formato Render)
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            parsed_url = urllib.parse.urlparse(database_url)
+            db_config = {
+                "host": parsed_url.hostname,
+                "port": parsed_url.port or 5432, # Default to 5432 if port is not in URL
+                "database": parsed_url.path.strip("/"),
+                "user": parsed_url.username,
+                "password": parsed_url.password,
+            }
+        else:
+            # Fallback a variables individuales (formato antiguo)
+            db_config = {
+                "host": os.getenv("DB_HOST", "127.0.0.1"),
+                "port": int(os.getenv("DB_PORT", "5432")),
+                "database": os.getenv("DB_NAME", "pry_lectura1"),
+                "user": os.getenv("DB_USER", "postgres"),
+                "password": os.getenv("DB_PASS", "123"),
+            }
+        
         app.state.db_pool = pool.SimpleConnectionPool(1, 10, **db_config)
         log.info("Conexión a base de datos establecida.")
     except Exception as e:

@@ -1,0 +1,44 @@
+Aquí tienes un resumen de las 3 mejores opciones para realizar el análisis estadístico de los datos de tu estudio, ideal para un artículo científico.
+
+### Opción 1: Prueba T de Student (o su alternativa, U de Mann-Whitney)
+
+**- Para qué sirve:** Es la mejor opción para responder a la pregunta: "¿Existe una diferencia *estadísticamente significativa* en una métrica específica entre dos grupos diferentes?". Es la prueba fundamental para validar tus hipótesis.
+
+**- Cómo aplicarla:**
+  1.  **Crea dos grupos de datos:**
+      *   **Grupo A (Pre-Intervención):** Todas las mediciones de una sesión *antes* de que la IA detectara "Crítico" y enviara al usuario a una actividad.
+      *   **Grupo B (Post-Intervención):** Todas las mediciones de la misma sesión *después* de que el usuario completara la actividad y regresara al monitoreo.
+  2.  **Elige tu métrica clave:** Por ejemplo, `perclos`, `ear_promedio` o `blink_rate_min`.
+  3.  **Aplica la prueba:** Compara la media (el promedio) de esa métrica entre el Grupo A y el Grupo B.
+  
+**- Qué resultado esperar:** Si obtienes un "p-valor" bajo (generalmente p < 0.05), puedes afirmar con alta confianza que la actividad de descanso tuvo un efecto real y medible sobre la métrica de fatiga. Por ejemplo: "El PERCLOS promedio disminuyó significativamente después de la intervención (p < 0.05)".
+
+**- Herramientas:** Python (con `scipy.stats.ttest_ind`) o software estadístico como JASP/JAMOVI.
+
+---
+
+### Opción 2: Análisis de Correlación (Coeficiente de Pearson o Spearman)
+
+**- Para qué sirve:** Responde a la pregunta: "¿Qué tan fuerte es la relación entre dos variables diferentes?". Es ideal para validar que tus métricas objetivas (medidas por la cámara) se corresponden con la experiencia subjetiva del usuario.
+
+**- Cómo aplicarla:**
+  1.  Al final de cada sesión, tienes el `kss_final` (la puntuación de 1 a 9 que el usuario introduce).
+  2.  Calcula la correlación entre el `kss_final` y las métricas objetivas promedio de esa sesión (ej. `perclos` promedio, `ear_promedio` total de la sesión, etc.).
+  
+**- Qué resultado esperar:** Un coeficiente de correlación cercano a +1 o -1 indica una relación fuerte. Por ejemplo, una alta correlación positiva entre `perclos` y `kss_final` demostraría que, efectivamente, cuando el sistema mide más cierre ocular, el usuario también se siente más somnoliento. Esto da una gran validez a tu sistema de medición.
+
+**- Herramientas:** Python (con `scipy.stats.pearsonr` o `pandas.DataFrame.corr()`) o JASP/JAMOVI.
+
+---
+
+### Opción 3: Visualización con Diagramas de Caja (Box Plots)
+
+**- Para qué sirve:** Es la forma más clara y profesional de *visualizar* las diferencias que encontraste con la Prueba T (Opción 1). Un gráfico vale más que mil números en un artículo.
+
+**- Cómo aplicarla:**
+  1.  Usando los mismos Grupo A (Pre-Intervención) y Grupo B (Post-Intervención) de la Opción 1.
+  2.  Crea un diagrama de caja para la métrica `perclos` (o la que elijas) para cada grupo, y ponlos uno al lado del otro en el mismo gráfico.
+  
+**- Qué resultado esperar:** El gráfico mostrará visualmente las medianas, los rangos y la dispersión de los datos de cada grupo. Si la "caja" del Grupo B está visiblemente más abajo que la del Grupo A, es una evidencia gráfica inmediata de que la intervención funcionó para reducir la fatiga. Es una figura de alto impacto para una publicación.
+
+**- Herramientas:** Python (con las librerías `matplotlib` o `seaborn`) o cualquier software estadístico (JASP, R, Excel).
