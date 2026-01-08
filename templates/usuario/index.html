@@ -33,6 +33,32 @@
 </nav>
 
 <main class="container py-5">
+    
+    <!-- ÚLTIMO DIAGNÓSTICO IA (Dinámico) -->
+    <div class="row mb-4 d-none" id="lastDiagnosisContainer">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white;">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="fw-bold mb-1"><i class="bi bi-robot me-2"></i>Último Diagnóstico IA</h5>
+                            <p class="mb-0 opacity-75 small" id="lastDiagDate">--/--/----</p>
+                        </div>
+                        <span class="badge bg-white text-primary" id="lastDiagStatus">Fatiga Normal</span>
+                    </div>
+                    
+                    <hr class="my-3 border-white opacity-25">
+                    
+                    <p class="mb-3" id="lastDiagText">Cargando análisis...</p>
+                    
+                    <a href="#" id="lastDiagLink" class="btn btn-sm btn-light text-primary fw-bold">
+                        Ver análisis completo <i class="bi bi-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4 align-items-stretch justify-content-center hero-row">
 
         <!-- PANEL IZQUIERDO -->
@@ -138,10 +164,62 @@
         return JSON.parse(usuarioStr);
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", async () => {
         const usuario = obtenerUsuario();
         const nameEl = document.getElementById('userName');
         if (nameEl) nameEl.innerText = `${usuario.nombre} ${usuario.apellido}`;
+
+        // Cargar último diagnóstico
+        try {
+            const resp = await fetch('/get-user-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ usuario_id: usuario.id })
+            });
+            const data = await resp.json();
+            
+            if (data.historial && data.historial.length > 0) {
+                const ultimaSesion = data.historial[0]; // La primera es la más reciente
+                
+                if (ultimaSesion.diagnostico_json) {
+                    let diag = ultimaSesion.diagnostico_json;
+                    // Manejo robusto de parseo JSON
+                    if (typeof diag === 'string') {
+                        try {
+                            diag = JSON.parse(diag);
+                        } catch (e) {
+                            console.warn("Error parseando JSON de diagnóstico:", e);
+                            return; 
+                        }
+                    }
+                    
+                    const container = document.getElementById('lastDiagnosisContainer');
+                    const fechaEl = document.getElementById('lastDiagDate');
+                    const statusEl = document.getElementById('lastDiagStatus');
+                    const textEl = document.getElementById('lastDiagText');
+                    const linkEl = document.getElementById('lastDiagLink');
+                    
+                    if (container && fechaEl && statusEl && textEl && linkEl) {
+                        container.classList.remove('d-none');
+                        fechaEl.textContent = "Fecha: " + (ultimaSesion.fecha || "Reciente");
+                        
+                        // Estado visual
+                        if (ultimaSesion.es_fatiga) {
+                            statusEl.textContent = 'Fatiga Detectada';
+                            statusEl.className = 'badge bg-danger text-white';
+                        } else {
+                            statusEl.textContent = 'Estado Normal';
+                            statusEl.className = 'badge bg-success text-white';
+                        }
+                        
+                        textEl.textContent = diag.diagnostico_general || "Diagnóstico completado. Revisa los detalles.";
+                        linkEl.href = `/usuario/resumen.html?sesion_id=${ultimaSesion.sesion_id}`;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error cargando diagnóstico dashboard:", e);
+        }
     });
 </script>
 
