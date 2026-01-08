@@ -1,6 +1,6 @@
 // ==========================================
 // MONITOREO CONTINUO - SecurityEye
-// Adaptado para redirección en lugar de Modals
+// Adaptado para lectura de PDF y guardado único al final
 // ==========================================
 
 // ==========================================
@@ -8,7 +8,7 @@
 // ==========================================
 
 const API_BASE = '';
-const videoElement = document.getElementById('videoElement');
+const videoElement = document.getElementById('videoElement'); // Webcam
 const canvasElement = document.getElementById('output_canvas');
 const canvasCtx = canvasElement.getContext('2d');
 const startBtn = document.getElementById('startBtn');
@@ -43,7 +43,7 @@ let startTime = 0;
 let lastFrameTime = 0;
 let sesionId = null;
 let lastBlinkTime = 0;
-let currentActivityType = null;
+let currentActivityType = 'pdf'; // Solo PDF
 let currentResourceUrl = null;
 let currentResourceName = null;
 
@@ -54,7 +54,7 @@ let isRecommendationModalOpen = false;
 // Constantes y umbrales
 const CALIBRATION_DURATION = 10;
 const ALERT_COOLDOWN = 30;
-const METRIC_PUSH_INTERVAL = 60;
+
 let calibrationEARs = [];
 let calibrationMARs = [];
 let baselineEAR = 0;
@@ -62,7 +62,6 @@ let baselineMAR = 0;
 let thresClose = 0.20;
 let thresOpen = 0.25;
 let thresYawn = 0.50;
-let metricsLastSent = 0;
 
 // Métricas de seguimiento
 let blinkCounter = 0;
@@ -155,6 +154,9 @@ faceMesh.onResults((results) => {
         const currentEAR = calcularEAR(lm, w, h);
         const currentMAR = calcularMAR(lm, w, h);
         const currentIrisPos = { x: lm[LEFT_IRIS_CENTER].x, y: lm[LEFT_IRIS_CENTER].y };
+        
+        // Guardamos EAR para promedio
+        earValues.push(currentEAR);
 
         // ======================================
         // ESTADOS DEL SISTEMA
@@ -192,6 +194,7 @@ faceMesh.onResults((results) => {
                 frameCount = 0;
                 alertasCount = 0;
                 momentosFatiga = [];
+                // Se eliminó metricsLastSent
             }
 
         } else if (appState === 'MONITORING') {
@@ -279,7 +282,7 @@ faceMesh.onResults((results) => {
             if (perclosEl) perclosEl.textContent = parseFloat(perclos.toFixed(1)) + '%';
 
             // -------------------------
-            // DETECCIÓN DE FATIGA (alineada con medicion.js)
+            // DETECCIÓN DE FATIGA (local para alertas)
             // -------------------------
             const blinkRateMin = elapsed > 0 ? (blinkCounter / (elapsed / 60)) : 0;
 
@@ -306,25 +309,15 @@ faceMesh.onResults((results) => {
                 if (alertsCountEl) alertsCountEl.textContent = alertasCount;
                 lastAlertTime = now;
 
-                // Guardar momento de fatiga
+                // Guardar momento de fatiga para el reporte final
                 momentosFatiga.push({
                     t: Math.round(elapsed),
                     reason: nivelFatiga >= 5 ? 'Fatiga severa' : 'Fatiga moderada'
                 });
             }
 
-            // -------------------------
-            // GUARDAR MÉTRICAS CADA 60 SEGUNDOS
-            // -------------------------
-            if ((elapsed - metricsLastSent) >= METRIC_PUSH_INTERVAL) {
-                metricsLastSent = elapsed;
-                guardarMetricasContinuas({
-                    tiempoTranscurrido: elapsed,
-                    perclos,
-                    blinkRateMin,
-                    avgVelocity
-                });
-            }
+            // **IMPORTANTE**: Se eliminó el guardado periódico de métricas.
+            // Ahora se acumulan y se envían solo al finalizar.
         }
     }
 
@@ -374,8 +367,8 @@ function startCamera(isResuming = false) {
             frameCount = 0;
             alertasCount = 0;
             momentosFatiga = [];
-            metricsLastSent = 0;
             maxSinParpadeo = 0;
+            earValues = [];
         }
     });
 }
@@ -409,8 +402,8 @@ function completeStopMonitoring() {
 // ==========================================
 
 async function crearSesion() {
-    if (!sesionId || !currentActivityType) {
-        console.error('Faltan datos de sesión');
+    if (!sesionId) {
+        console.error('Falta ID de sesión');
         alert('Error: Sesión no válida');
         completeStopMonitoring();
         return;
@@ -418,87 +411,7 @@ async function crearSesion() {
     console.log('Usando sesión existente con ID:', sesionId);
 }
 
-async function guardarMetricasContinuas({ tiempoTranscurrido, perclos, blinkRateMin, avgVelocity }) {
-    if (!sesionId) return;
-
-    const usuario = JSON.parse(localStorage.getItem('usuario'));
-    const activityType = currentActivityType;
-
-    const ear_promedio = earValues.length > 0 ? earValues.reduce((a, b) => a + b, 0) / earValues.length : 0;
-    earValues = []; 
-
-    const sebr = blinkCounter;
-    const pctIncompletos = sebr > 0 ? (incompleteBlinks / sebr) * 100 : 0;
-    const esFatiga = perclos >= 15 || alertasCount >= 2;
-
-    const payload = {
-        sesion_id: sesionId,
-        usuario_id: usuario.id,
-        actividad: activityType,
-        tiempo_total_seg: Math.round(tiempoTranscurrido),
-        perclos: parseFloat(perclos.toFixed(2)),
-        sebr: sebr,
-        ear_promedio: parseFloat(ear_promedio.toFixed(4)),
-        blink_rate_min: parseFloat(blinkRateMin.toFixed(2)),
-        pct_incompletos: parseFloat(pctIncompletos.toFixed(2)),
-        num_bostezos: yawnCounter,
-        tiempo_cierre: parseFloat(accumulatedClosureTime.toFixed(2)),
-        velocidad_ocular: parseFloat(avgVelocity.toFixed(4)),
-        max_sin_parpadeo: Math.round(maxSinParpadeo),
-        alertas: alertasCount,
-        momentos_fatiga: momentosFatiga,
-        es_fatiga: esFatiga
-    };
-
-    try {
-        const response = await fetch(`${API_BASE}/save-fatigue`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            console.log("Respuesta de diagnóstico recibida:", JSON.stringify(data, null, 2));
-
-            let diagnosisData = data.diagnostico;
-            let diagnosis = null;
-
-            if (diagnosisData) {
-                if (Array.isArray(diagnosisData) && diagnosisData.length > 0) {
-                    diagnosis = diagnosisData[0];
-                } else if (typeof diagnosisData === 'object') {
-                    diagnosis = diagnosisData;
-                }
-            }
-
-            if (diagnosis) {
-                const nivelFatigaLimpio = diagnosis.nivel_fatiga ? diagnosis.nivel_fatiga.trim() : '';
-
-                if (nivelFatigaLimpio === 'Crítico' && diagnosis.instruccion_sugerida && !isRecommendationModalOpen) {
-                    console.log('FATIGA CRÍTICA DETECTADA. Mostrando modal de recomendación...');
-                    isRecommendationModalOpen = true;
-
-                    const instruccionId = diagnosis.instruccion_sugerida;
-                    // Preparamos la URL de redirección
-                    pendingRedirectUrl = `/usuario/instruccion${instruccionId}.html?sesion_id=${sesionId}&tipo=${currentActivityType}&nombre=${encodeURIComponent(currentResourceName)}&url=${encodeURIComponent(currentResourceUrl)}`;
-                    
-                    const reasonEl = document.getElementById('recommendationReason');
-                    if (reasonEl && diagnosis.razon_recomendacion) {
-                        reasonEl.textContent = diagnosis.razon_recomendacion;
-                    }
-
-                    const recommendationModal = new bootstrap.Modal(document.getElementById('recommendationModal'));
-                    recommendationModal.show();
-                } 
-            }
-        } else {
-            console.warn('Error guardando métricas:', response.status, await response.text());
-        }
-    } catch (e) {
-        console.error('Error al guardar métricas continuas:', e);
-    }
-}
+// Se eliminó guardarMetricasContinuas
 
 async function finalizarSesion() {
     completeStopMonitoring();
@@ -516,12 +429,17 @@ function mostrarModalKSS() {
             kssModal.hide();
 
             const usuario = JSON.parse(localStorage.getItem('usuario'));
-            const activityType = currentActivityType;
+            const activityType = 'pdf';
+            
+            // Cálculos finales totales
             const tiempoTotal = Math.round((performance.now() / 1000) - startTime - (CALIBRATION_DURATION));
             const blinkRateMinFinal = tiempoTotal > 0 ? (blinkCounter / (tiempoTotal / 60)) : 0;
             const perclos = measureFramesTotal > 0 ? (measureFramesClosed / measureFramesTotal) * 100 : 0;
             const pctIncompletos = blinkCounter > 0 ? (incompleteBlinks / blinkCounter) * 100 : 0;
             const avgVelocity = frameCount > 5 ? parseFloat(((totalIrisDistance / frameCount) * 100).toFixed(4)) : 0;
+            const earPromedio = earValues.length > 0 ? earValues.reduce((a, b) => a + b, 0) / earValues.length : 0;
+            
+            // Estado de fatiga final
             const esFatiga = perclos >= 15 || alertasCount >= 2 || parseInt(kssValue) >= 7;
 
             const payload = {
@@ -536,6 +454,7 @@ function mostrarModalKSS() {
                 num_bostezos: yawnCounter,
                 tiempo_cierre: parseFloat(accumulatedClosureTime.toFixed(2)),
                 velocidad_ocular: parseFloat(avgVelocity.toFixed(4)),
+                ear_promedio: parseFloat(earPromedio.toFixed(4)),
                 max_sin_parpadeo: Math.round(maxSinParpadeo),
                 kss_final: parseInt(kssValue),
                 alertas: alertasCount,
@@ -543,7 +462,11 @@ function mostrarModalKSS() {
                 es_fatiga: esFatiga
             };
 
+            // Mostrar spinner o mensaje de carga si se desea (opcional)
+            console.log("Enviando datos finales y solicitando diagnóstico IA...");
+
             try {
+                // Esta llamada ahora es ÚNICA y dispara el diagnóstico IA en el backend
                 const response = await fetch(`${API_BASE}/save-fatigue`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -551,9 +474,13 @@ function mostrarModalKSS() {
                 });
 
                 if (response.ok) {
+                    const data = await response.json();
+                    console.log("Sesión finalizada. Diagnóstico:", data.diagnostico);
                     window.location.href = `/usuario/resumen.html?sesion_id=${sesionId}`;
                 } else {
-                    alert('Error al guardar la sesión final.');
+                    const err = await response.text();
+                    console.error("Error backend:", err);
+                    alert('Error al guardar la sesión final: ' + err);
                 }
             } catch (e) {
                 console.error('Error:', e);
@@ -632,33 +559,31 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    console.log("Cargando sesión desde parámetros de URL.");
     const params = new URLSearchParams(window.location.search);
     sesionId = params.get('sesion_id');
-    currentActivityType = params.get('tipo');
     currentResourceName = params.get('nombre');
     currentResourceUrl = params.get('url');
     
     // Para PDFs locales que no tienen URL directamente en el input
-    if (currentActivityType === 'pdf' && !currentResourceUrl) {
+    if (!currentResourceUrl) {
         currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
         sessionStorage.removeItem('pdfDataUrl'); 
     }
 
-    if (!sesionId || !currentActivityType || !currentResourceName) {
+    if (!sesionId || !currentResourceName) {
         alert('Sesión no válida. Redirigiendo...');
         window.location.href = 'seleccionar_actividad.html';
         return;
     }
 
-    const tipoTexto = currentActivityType === 'video' ? 'Video' : 'PDF';
-    if(sessionInfoEl) sessionInfoEl.textContent = `${tipoTexto} - ${currentResourceName}`;
-    cargarContenido(currentActivityType, currentResourceUrl, currentResourceName);
-    // No llamar a startCamera aquí, el usuario debe iniciar manualmente
+    if(sessionInfoEl) sessionInfoEl.textContent = `Lectura - ${currentResourceName}`;
+    
+    // Forzamos carga PDF
+    cargarContenidoPDF(currentResourceUrl, currentResourceName);
 });
 
 // ==========================================
-// 8. CARGAR CONTENIDO (VIDEO/PDF)
+// 8. CARGAR CONTENIDO (SOLO PDF)
 // ==========================================
 
 function renderPage(num) {
@@ -711,68 +636,34 @@ function onNextPage() {
     queueRenderPage(pageNum);
 }
 
-function convertirYouTubeUrl(url) {
-    const youtubeRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})/;
-    const match = url.match(youtubeRegex);
-    if (match && match[1]) return `https://www.youtube.com/embed/${match[1]}`;
-    return url;
-}
-
-function cargarContenido(tipo, url, nombre) {
-    console.log('Cargando contenido:', { tipo, url, nombre });
+function cargarContenidoPDF(url, nombre) {
+    console.log('Cargando PDF:', { url, nombre });
     contentContainer.innerHTML = '';
     const hasUrl = url && url.trim() !== '';
 
-    if (tipo === 'video') {
-        if (hasUrl) {
-            const esYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-            if (esYouTube) {
-                const iframe = document.createElement('iframe');
-                iframe.src = convertirYouTubeUrl(url);
-                iframe.style.width = '100%';
-                iframe.style.height = '100%';
-                iframe.style.border = 'none';
-                iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-                iframe.allowFullscreen = true;
-                contentContainer.appendChild(iframe);
-            } else {
-                const videoEl = document.createElement('video');
-                videoEl.src = url;
-                videoEl.controls = true;
-                videoEl.autoplay = false;
-                videoEl.style.width = '100%';
-                videoEl.style.height = '100%';
-                videoEl.style.objectFit = 'contain';
-                contentContainer.appendChild(videoEl);
-            }
-        } else {
-            contentContainer.innerHTML = `<div class="text-center text-white p-4"><i class="bi bi-film fs-1 d-block mb-2"></i><p class="mb-0">${nombre}</p><small class="text-muted">Sin archivo proporcionado</small></div>`;
-        }
-    } else if (tipo === 'pdf') {
-        if (hasUrl) {
-            contentContainer.innerHTML = `
-                <div id="pdf-viewer" style="width: 100%; height: 100%; display: flex; flex-direction: column;">
-                    <div id="pdf-controls" class="d-flex justify-content-center align-items-center p-2 bg-dark text-white gap-3">
-                        <button id="prev-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left"></i></button>
-                        <span>Página: <span id="page-num">0</span> / <span id="page-count">0</span></span>
-                        <button id="next-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-right"></i></button>
-                    </div>
-                    <div style="flex-grow: 1; overflow: auto; text-align: center;"><canvas id="pdf-canvas"></canvas></div>
-                </div>`;
-            document.getElementById('prev-page').addEventListener('click', onPrevPage);
-            document.getElementById('next-page').addEventListener('click', onNextPage);
-            pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
-                pdfDoc = pdfDoc_;
-                document.getElementById('page-count').textContent = pdfDoc.numPages;
-                pageNum = 1;
-                renderPage(pageNum);
-            }).catch(err => {
-                console.error('Error al cargar el PDF:', err);
-                contentContainer.innerHTML = `<div class="text-center text-danger p-4"><i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i><p class="mb-0">Error al cargar el PDF.</p><small class="text-muted">${err.message}</small></div>`;
-            });
-        } else {
-            contentContainer.innerHTML = `<div class="text-center text-white p-4"><i class="bi bi-file-earmark-pdf fs-1 d-block mb-2"></i><p class="mb-0">${nombre}</p><small class="text-muted">Sin archivo proporcionado</small></div>`;
-        }
+    if (hasUrl) {
+        contentContainer.innerHTML = `
+            <div id="pdf-viewer" style="width: 100%; height: 100%; display: flex; flex-direction: column;">
+                <div id="pdf-controls" class="d-flex justify-content-center align-items-center p-2 bg-dark text-white gap-3">
+                    <button id="prev-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left"></i></button>
+                    <span>Página: <span id="page-num">0</span> / <span id="page-count">0</span></span>
+                    <button id="next-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-right"></i></button>
+                </div>
+                <div style="flex-grow: 1; overflow: auto; text-align: center;"><canvas id="pdf-canvas"></canvas></div>
+            </div>`;
+        document.getElementById('prev-page').addEventListener('click', onPrevPage);
+        document.getElementById('next-page').addEventListener('click', onNextPage);
+        pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
+            pdfDoc = pdfDoc_;
+            document.getElementById('page-count').textContent = pdfDoc.numPages;
+            pageNum = 1;
+            renderPage(pageNum);
+        }).catch(err => {
+            console.error('Error al cargar el PDF:', err);
+            contentContainer.innerHTML = `<div class="text-center text-danger p-4"><i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i><p class="mb-0">Error al cargar el PDF.</p><small class="text-muted">${err.message}</small></div>`;
+        });
+    } else {
+        contentContainer.innerHTML = `<div class="text-center text-white p-4"><i class="bi bi-file-earmark-pdf fs-1 d-block mb-2"></i><p class="mb-0">${nombre}</p><small class="text-muted">Sin archivo proporcionado</small></div>`;
     }
 }
 
@@ -786,7 +677,6 @@ if (confirmBtn && recommendationModalEl) {
     confirmBtn.onclick = () => {
         if (pendingRedirectUrl) {
             completeStopMonitoring();
-            // Ya no es necesario guardar resumeState, solo redirigir
             window.location.href = pendingRedirectUrl;
         }
     };
@@ -794,6 +684,5 @@ if (confirmBtn && recommendationModalEl) {
     recommendationModalEl.addEventListener('hidden.bs.modal', () => {
         isRecommendationModalOpen = false;
         pendingRedirectUrl = null;
-        console.log('Modal de recomendación cerrado.');
     });
 }

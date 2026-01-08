@@ -313,34 +313,36 @@ async def save_fatigue(data: FatigueResult):
 
         sesion_id = data.sesion_id
         if not sesion_id:
+            # Fallback por si no llega sesion_id (no debería ocurrir en flujo normal)
             cur.execute("SELECT id FROM sesiones WHERE usuario_id = %s AND fecha_fin IS NULL ORDER BY id DESC LIMIT 1", (data.usuario_id,))
             row = cur.fetchone()
             if row:
                 sesion_id = row["id"]
-            else: # Si no hay sesión abierta, no debería ocurrir en este flujo, pero como fallback.
-                raise HTTPException(status_code=404, detail="No se encontró una sesión activa para la medición.")
+            else:
+                raise HTTPException(status_code=404, detail="No se encontró una sesión activa para finalizar.")
 
-        # Guardar medición continua
+        # 1. Guardar medición ÚNICA (Resumen de toda la sesión)
         estado_txt = "FATIGA" if data.es_fatiga else "NORMAL"
         nivel_val = 1 if data.es_fatiga else 0
         momentos_json = json.dumps(data.momentos_fatiga) if data.momentos_fatiga else None
 
+        # Insertamos una sola fila que representa el promedio/total de la sesión
         query = """
             INSERT INTO mediciones (
                 sesion_id, actividad, parpadeos, blink_rate_min, perclos, ear_promedio, pct_incompletos,
                 tiempo_cierre, num_bostezos, velocidad_ocular,
-                nivel_fatiga, estado_fatiga, max_sin_parpadeo, alertas, momentos_fatiga
-            ) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s )
+                nivel_fatiga, estado_fatiga, max_sin_parpadeo, alertas, momentos_fatiga, nivel_subjetivo, fecha
+            ) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW() )
         """
         cur.execute(query, (
             sesion_id, data.actividad, data.sebr, data.blink_rate_min, data.perclos, data.ear_promedio,
             data.pct_incompletos, data.tiempo_cierre, data.num_bostezos, data.velocidad_ocular,
-            nivel_val, estado_txt, data.max_sin_parpadeo, data.alertas, momentos_json,
+            nivel_val, estado_txt, data.max_sin_parpadeo, data.alertas, momentos_json, data.kss_final
         ))
 
-        # --- Llamada a N8N para diagnóstico ---
+        # 2. Llamada a N8N para diagnóstico
         try:
-            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://cagonzalez12.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
+            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://cesarandresgoto.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
             if n8n_webhook_url:
                 payload_to_n8n = {
                     "usuario_id": data.usuario_id,
@@ -358,9 +360,10 @@ async def save_fatigue(data: FatigueResult):
                     "tiempo_total_seg": data.tiempo_total_seg,
                     "max_sin_parpadeo": data.max_sin_parpadeo,
                     "alertas": data.alertas,
-                    "momentos_fatiga": data.momentos_fatiga
+                    "momentos_fatiga": data.momentos_fatiga,
+                    "kss_final": data.kss_final
                 }
-                log.info(f"Enviando payload a N8N: {json.dumps(payload_to_n8n, indent=2)}")
+                log.info(f"Enviando payload FINAL a N8N: {json.dumps(payload_to_n8n, indent=2)}")
                 
                 async with httpx.AsyncClient() as client:
                     response = await client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
@@ -376,34 +379,28 @@ async def save_fatigue(data: FatigueResult):
         except Exception as e:
             log.error(f"Error al contactar N8N: {e}")
 
-        # Actualizar sesión con el último tiempo total y kss_final si está presente
-        if data.kss_final is not None:
-            summary_json = json.dumps(diagnostico_ia) if diagnostico_ia else None
-            cur.execute(
-                """
-                UPDATE sesiones 
-                SET total_segundos = %s, 
-                    alertas = %s, 
-                    kss_final = %s,
-                    es_fatiga = %s,
-                    resumen = %s,
-                    fecha_fin = NOW()
-                WHERE id = %s
-                """,
-                (data.tiempo_total_seg, data.alertas, data.kss_final, data.es_fatiga, summary_json, sesion_id)
-            )
-        else:
-            cur.execute(
-                "UPDATE sesiones SET total_segundos = %s, alertas = %s WHERE id = %s",
-                (data.tiempo_total_seg, data.alertas, sesion_id)
-            )
+        # 3. Cerrar Sesión en BD
+        summary_json = json.dumps(diagnostico_ia) if diagnostico_ia else None
+        cur.execute(
+            """
+            UPDATE sesiones 
+            SET total_segundos = %s, 
+                alertas = %s, 
+                kss_final = %s,
+                es_fatiga = %s,
+                resumen = %s,
+                fecha_fin = NOW()
+            WHERE id = %s
+            """,
+            (data.tiempo_total_seg, data.alertas, data.kss_final, data.es_fatiga, summary_json, sesion_id)
+        )
 
         conn.commit()
         
         return {
-            "mensaje": "Medición guardada exitosamente",
+            "mensaje": "Sesión finalizada y guardada correctamente",
             "sesion_id": sesion_id,
-            "diagnostico": diagnostico_ia # Clave corregida para que coincida con el frontend
+            "diagnostico": diagnostico_ia
         }
 
     except Exception as e:

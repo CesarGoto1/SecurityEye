@@ -33,66 +33,36 @@
       <div class="col-lg-8">
         <div class="card-gradient p-4 mb-4">
           <h3 class="fw-bold mb-3">
-            <i class="bi bi-gear"></i> Configurar sesión de monitoreo
+            <i class="bi bi-book"></i> Lectura de PDF
           </h3>
-          <p class="text-muted">Selecciona el tipo de actividad y el recurso que utilizarás durante el monitoreo.</p>
+          <p class="text-muted">Carga el documento PDF que deseas leer para iniciar el monitoreo de fatiga.</p>
         </div>
 
         <div class="card-gradient p-4 mb-4">
-          <div class="mb-4">
-            <label for="tipoActividad" class="form-label fw-bold">
-              <i class="bi bi-collection"></i> Tipo de actividad
-            </label>
-            <select id="tipoActividad" class="form-select form-select-lg">
-              <option value="video">Ver video</option>
-              <option value="pdf">Leer PDF</option>
-            </select>
-          </div>
-
-          <!-- Inputs para video -->
-          <div id="videoInputs">
+          
+          <!-- Inputs SOLO para PDF -->
+          <div id="pdfInputs">
             <div class="mb-3">
-              <label for="fuenteNombre" class="form-label fw-bold">Nombre del recurso</label>
-              <input id="fuenteNombre" type="text" class="form-control" 
-                     placeholder="Ej: Tutorial de Python" required />
-            </div>
-            <div class="mb-3">
-              <label for="fuenteUrl" class="form-label fw-bold">URL del video (opcional)</label>
-              <input id="fuenteUrl" type="url" class="form-control" 
-                     placeholder="https://..." />
-              <small class="text-muted">Si proporcionas una URL, el video se reproducirá en la pantalla</small>
-            </div>
-            <div class="mb-3">
-              <label for="fuenteFile" class="form-label fw-bold">O sube un archivo</label>
-              <input id="fuenteFile" type="file" class="form-control" accept="video/*" />
-              <small class="text-muted">El archivo se usará localmente, no se guarda en el servidor</small>
-            </div>
-          </div>
-
-          <!-- Inputs para PDF -->
-          <div id="pdfInputs" class="d-none">
-            <div class="mb-3">
-              <label for="pdfNombre" class="form-label fw-bold">Nombre del recurso</label>
+              <label for="pdfNombre" class="form-label fw-bold">Nombre del documento</label>
               <input id="pdfNombre" type="text" class="form-control" 
-                     placeholder="Ej: Manual de usuario" required />
+                     placeholder="Ej: Manual de usuario, Artículo científico..." required />
             </div>
             <div class="mb-3">
-              <label for="pdfUrl" class="form-label fw-bold">URL del PDF (opcional)</label>
+              <label for="pdfFile" class="form-label fw-bold">Subir archivo PDF</label>
+              <input id="pdfFile" type="file" class="form-control" accept="application/pdf" />
+              <small class="text-muted">El archivo se procesará localmente en tu navegador.</small>
+            </div>
+            <div class="mb-3">
+              <label for="pdfUrl" class="form-label fw-bold">O pegar URL de PDF (opcional)</label>
               <input id="pdfUrl" type="url" class="form-control" 
                      placeholder="https://..." />
-              <small class="text-muted">Si proporcionas una URL, el PDF se mostrará en la pantalla</small>
-            </div>
-            <div class="mb-3">
-              <label for="pdfFile" class="form-label fw-bold">O sube un archivo</label>
-              <input id="pdfFile" type="file" class="form-control" accept="application/pdf" />
-              <small class="text-muted">El archivo se usará localmente, no se guarda en el servidor</small>
             </div>
           </div>
         </div>
 
         <div class="d-grid gap-2">
           <button id="btnIniciar" class="btn btn-primary btn-lg">
-            <i class="bi bi-play-circle"></i> Iniciar sesión de monitoreo
+            <i class="bi bi-play-circle"></i> Iniciar sesión
           </button>
           <a href="index.html" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Cancelar

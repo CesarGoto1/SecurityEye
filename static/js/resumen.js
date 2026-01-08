@@ -99,7 +99,6 @@ async function cargarDatosSesion() {
                     sesionData.momentos_fatiga = []; 
                 }
             } else if (!Array.isArray(sesionData.momentos_fatiga)) {
-                // If it's an object but not an array, treat as empty or log warning
                 console.warn('momentos_fatiga no es un array ni un string JSON válido:', sesionData.momentos_fatiga);
                 sesionData.momentos_fatiga = [];
             }
@@ -112,6 +111,68 @@ async function cargarDatosSesion() {
 
         // Timeline de alertas
         construirTimelineAlertas(sesionData.momentos_fatiga);
+
+        // --- RENDERIZAR DIAGNÓSTICO IA ---
+        if (sesionData.diagnostico_json) {
+            try {
+                let diag = sesionData.diagnostico_json;
+                if (typeof diag === 'string') {
+                    diag = JSON.parse(diag);
+                }
+
+                // Mostrar sección
+                document.getElementById('aiDiagnosisSection').style.display = 'block';
+
+                // 1. Diagnóstico General
+                document.getElementById('aiGeneralDiagnosis').textContent = 
+                    diag.diagnostico_general || "No disponible.";
+
+                // 2. Análisis Biométrico
+                const bioList = document.getElementById('aiBiometricAnalysis');
+                bioList.innerHTML = '';
+                if (diag.analisis_biometrico) {
+                    for (const [key, value] of Object.entries(diag.analisis_biometrico)) {
+                        const li = document.createElement('li');
+                        li.className = "mb-2 text-white-50 small";
+                        li.innerHTML = `<strong class="text-white text-capitalize">${key.replace('_', ' ')}:</strong> ${value}`;
+                        bioList.appendChild(li);
+                    }
+                }
+
+                // 3. Prescripción Médica
+                if (diag.prescripcion_medica) {
+                    document.getElementById('aiPrescribedActivity').textContent = 
+                        diag.prescripcion_medica.nombre_actividad || "Descanso General";
+                    
+                    document.getElementById('aiPrescriptionReason').textContent = 
+                        diag.prescripcion_medica.justificacion_cientifica || "";
+
+                    const btnPresc = document.getElementById('btnStartPrescribed');
+                    const actId = diag.prescripcion_medica.instruccion_id;
+                    if (actId) {
+                        btnPresc.href = `/usuario/instruccion${actId}.html?sesion_id=${sesionId}`;
+                        btnPresc.classList.remove('disabled');
+                    } else {
+                        btnPresc.classList.add('disabled');
+                    }
+                }
+
+                // 4. Recomendaciones
+                const recContainer = document.getElementById('aiRecommendations');
+                recContainer.innerHTML = '';
+                if (diag.recomendaciones_adicionales && Array.isArray(diag.recomendaciones_adicionales)) {
+                    diag.recomendaciones_adicionales.forEach(rec => {
+                        const span = document.createElement('span');
+                        span.className = "badge bg-success bg-opacity-25 text-success border border-success fw-normal";
+                        span.textContent = rec;
+                        recContainer.appendChild(span);
+                    });
+                }
+
+            } catch (err) {
+                console.error("Error parseando diagnóstico IA:", err);
+            }
+        }
 
     } catch (e) {
         console.error('Error cargando sesión:', e);

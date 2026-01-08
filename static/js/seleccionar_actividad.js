@@ -1,26 +1,11 @@
 const API_BASE = '';
 
 document.addEventListener('DOMContentLoaded', () => {
-  const tipoSel = document.getElementById('tipoActividad');
-  const videoInputs = document.getElementById('videoInputs');
-  const pdfInputs = document.getElementById('pdfInputs');
   const btn = document.getElementById('btnIniciar');
 
-  // Cambiar inputs según tipo de actividad
-  tipoSel.addEventListener('change', () => {
-    const t = tipoSel.value;
-    if (t === 'video') {
-      videoInputs.classList.remove('d-none');
-      pdfInputs.classList.add('d-none');
-    } else {
-      videoInputs.classList.add('d-none');
-      pdfInputs.classList.remove('d-none');
-    }
-  });
-
-  // Iniciar sesión
+  // Iniciar sesión solo para PDF
   btn.addEventListener('click', async () => {
-    const tipo = tipoSel.value;
+    const tipo = 'pdf'; // Forzado a PDF
     const usuarioId = JSON.parse(localStorage.getItem('usuario'))?.id;
     
     if (!usuarioId) {
@@ -28,20 +13,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Obtener datos según tipo
-    let nombre, url, file;
-    if (tipo === 'video') {
-      nombre = document.getElementById('fuenteNombre').value.trim();
-      url = document.getElementById('fuenteUrl').value.trim();
-      file = document.getElementById('fuenteFile').files[0];
-    } else {
-      nombre = document.getElementById('pdfNombre').value.trim();
-      url = document.getElementById('pdfUrl').value.trim();
-      file = document.getElementById('pdfFile').files[0];
-    }
+    // Obtener datos del formulario PDF
+    const nombre = document.getElementById('pdfNombre').value.trim();
+    const url = document.getElementById('pdfUrl').value.trim();
+    const file = document.getElementById('pdfFile').files[0];
 
     if (!nombre) {
-      alert('Por favor ingresa un nombre para el recurso.');
+      alert('Por favor ingresa un nombre para el documento.');
+      return;
+    }
+    
+    if (!url && !file) {
+      alert('Por favor selecciona un archivo o ingresa una URL.');
       return;
     }
 
@@ -65,29 +48,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await resp.json();
       const sesionId = data.sesion_id;
 
-      // Gestionar URL del recurso
+      // Gestionar recurso (Archivo o URL)
       let resourceUrl = url;
       if (file && !url) {
-        // Para archivos PDF, leer como DataURL y guardar en sessionStorage
-        // para evitar problemas de seguridad con blob: URLs en la siguiente página.
-        if (tipo === 'pdf') {
-          try {
-            const fileDataUrl = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = e => resolve(e.target.result);
-              reader.onerror = e => reject(new Error('No se pudo leer el archivo.'));
-              reader.readAsDataURL(file);
-            });
-            sessionStorage.setItem('pdfDataUrl', fileDataUrl);
-            resourceUrl = ''; // No pasar la URL en el parámetro
-          } catch (fileError) {
-            console.error(fileError);
-            alert(fileError.message);
-            return;
-          }
-        } else {
-          // Mantener el comportamiento original para videos
-          resourceUrl = URL.createObjectURL(file);
+        // Leer PDF como DataURL y guardar en sessionStorage
+        try {
+          const fileDataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = e => reject(new Error('No se pudo leer el archivo.'));
+            reader.readAsDataURL(file);
+          });
+          sessionStorage.setItem('pdfDataUrl', fileDataUrl);
+          resourceUrl = ''; // URL vacía para que lea del storage en la siguiente pág
+        } catch (fileError) {
+          console.error(fileError);
+          alert(fileError.message);
+          return;
         }
       }
 
@@ -98,7 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
         nombre: nombre,
       });
 
-      // Solo añadir URL si no es un PDF local (ya guardado en session)
       if (resourceUrl) {
         params.append('url', resourceUrl);
       }
