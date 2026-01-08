@@ -143,12 +143,6 @@
         const nameEl = document.getElementById('userName');
         if (nameEl) nameEl.innerText = `${usuario.nombre} ${usuario.apellido}`;
     });
-
-    function cerrarSesion() {
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.href = "/templates/login.html";
-    }
 </script>
 
 

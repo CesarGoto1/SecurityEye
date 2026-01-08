@@ -6,7 +6,7 @@ function obtenerUsuario() {
 
     if (!usuarioStr) {
         alert("Debes iniciar sesión para continuar.");
-        window.location.href = "/templates/login.html";
+        window.location.href = "/login.html";
         throw new Error("Usuario no autenticado");
     }
 

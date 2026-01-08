@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Protección de ruta
     const usuario = localStorage.getItem('usuario');
     if (!usuario) {
-        window.location.href = '/templates/login.html';
+        window.location.href = '/login.html';
         return;
     }
 

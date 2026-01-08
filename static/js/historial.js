@@ -277,13 +277,3 @@ async function abrirDetalles(sesionId) {
         alert('Error al cargar detalles de sesión');
     }
 }
-
-// ==========================================
-// 7. CERRAR SESIÓN
-// ==========================================
-
-function cerrarSesion() {
-    localStorage.removeItem('usuario');
-    localStorage.removeItem('token');
-    window.location.href = '/login.html';
-}
