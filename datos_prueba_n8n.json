@@ -1,0 +1,13 @@
+{
+  "resumen_sesion": {
+    "tiempo_total_seg": 1800,
+    "perclos": 0.08,
+    "sebr": 6.5,
+    "blink_rate_min": 12.5,
+    "pct_incompletos": 0.20,
+    "num_bostezos": 3,
+    "velocidad_ocular": 210.0,
+    "alertas_totales": 5,
+    "kss_final": 7
+  }
+}

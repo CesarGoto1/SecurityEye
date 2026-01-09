@@ -345,23 +345,17 @@ async def save_fatigue(data: FatigueResult):
             n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://cesarandresgoto.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
             if n8n_webhook_url:
                 payload_to_n8n = {
-                    "usuario_id": data.usuario_id,
-                    "sesion_id": sesion_id,
-                    "actividad": data.actividad,
-                    "perclos": float(data.perclos),
-                    "sebr": data.sebr,
-                    "ear_promedio": float(data.ear_promedio) if data.ear_promedio is not None else 0.0,
-                    "blink_rate_min": float(data.blink_rate_min),
-                    "pct_incompletos": float(data.pct_incompletos),
-                    "num_bostezos": data.num_bostezos,
-                    "tiempo_cierre": float(data.tiempo_cierre),
-                    "velocidad_ocular": float(data.velocidad_ocular),
-                    "es_fatiga": data.es_fatiga,
-                    "tiempo_total_seg": data.tiempo_total_seg,
-                    "max_sin_parpadeo": data.max_sin_parpadeo,
-                    "alertas": data.alertas,
-                    "momentos_fatiga": data.momentos_fatiga,
-                    "kss_final": data.kss_final
+                    "resumen_sesion": {
+                        "tiempo_total_seg": data.tiempo_total_seg,
+                        "perclos": float(data.perclos),
+                        "sebr": data.sebr,
+                        "blink_rate_min": float(data.blink_rate_min),
+                        "pct_incompletos": float(data.pct_incompletos),
+                        "num_bostezos": data.num_bostezos,
+                        "velocidad_ocular": float(data.velocidad_ocular),
+                        "alertas_totales": data.alertas,
+                        "kss_final": data.kss_final
+                    }
                 }
                 log.info(f"Enviando payload FINAL a N8N: {json.dumps(payload_to_n8n, indent=2)}")
                 
