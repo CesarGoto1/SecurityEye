@@ -343,6 +343,9 @@ async def save_fatigue(data: FatigueResult):
         # 2. Llamada a N8N para diagnóstico
         try:
             n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://cesarandresgoto.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
+            log.info(f"--- INICIO INTENTO DE LLAMADA A N8N ---")
+            log.info(f"URL Objetivo: {n8n_webhook_url}")
+            
             if n8n_webhook_url:
                 payload_to_n8n = {
                     "resumen_sesion": {
@@ -357,21 +360,35 @@ async def save_fatigue(data: FatigueResult):
                         "kss_final": data.kss_final
                     }
                 }
-                log.info(f"Enviando payload FINAL a N8N: {json.dumps(payload_to_n8n, indent=2)}")
+                log.info(f"Payload preparado para N8N: {json.dumps(payload_to_n8n, indent=2)}")
                 
                 async with httpx.AsyncClient() as client:
+                    log.info("Enviando POST request a N8N...")
                     response = await client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
+                    log.info(f"Respuesta recibida de N8N. Status Code: {response.status_code}")
+                    
                     response.raise_for_status()
                     responseData = response.json()
+                    log.info(f"Cuerpo de respuesta N8N: {responseData}")
+                    
                     diagnostico_ia = responseData[0]['json'] if isinstance(responseData, list) and responseData and 'json' in responseData[0] else responseData
 
                 if diagnostico_ia and sesion_id:
+                    log.info("Guardando diagnóstico IA en base de datos...")
                     cur.execute(
                         "INSERT INTO diagnosticos_ia (sesion_id, diagnostico_json) VALUES (%s, %s) ON CONFLICT (sesion_id) DO UPDATE SET diagnostico_json = EXCLUDED.diagnostico_json",
                         (sesion_id, json.dumps(diagnostico_ia))
                     )
+                    log.info("Diagnóstico IA guardado correctamente.")
+            
+            log.info(f"--- FIN EXITOSO LLAMADA A N8N ---")
+
+        except httpx.HTTPStatusError as e:
+            log.error(f"!!! ERROR HTTP N8N: {e.response.status_code} - {e.response.text}")
+        except httpx.RequestError as e:
+             log.error(f"!!! ERROR DE CONEXIÓN N8N: {e}")
         except Exception as e:
-            log.error(f"Error al contactar N8N: {e}")
+            log.exception(f"!!! ERROR GENERAL LLAMADA N8N: {e}")
 
         # 3. Cerrar Sesión en BD
         summary_json = json.dumps(diagnostico_ia) if diagnostico_ia else None

@@ -133,8 +133,8 @@ async function cargarDatosSesion() {
                 if (diag.analisis_biometrico) {
                     for (const [key, value] of Object.entries(diag.analisis_biometrico)) {
                         const li = document.createElement('li');
-                        li.className = "mb-2 text-white-50 small";
-                        li.innerHTML = `<strong class="text-white text-capitalize">${key.replace('_', ' ')}:</strong> ${value}`;
+                        li.className = "mb-2 text-muted small";
+                        li.innerHTML = `<strong class="text-dark text-capitalize">${key.replace('_', ' ')}:</strong> ${value}`;
                         bioList.appendChild(li);
                     }
                 }
