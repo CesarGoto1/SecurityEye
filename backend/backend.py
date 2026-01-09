@@ -9,7 +9,7 @@ import urllib.parse # Importar para parsear la URL de la base de datos
 
 import psycopg2
 from psycopg2 import pool, extras
-import bcrypt
+import hashlib
 
 # Configuración de logs
 logging.basicConfig(level=logging.INFO)
@@ -185,15 +185,15 @@ def register_user(data: Register):
         if cur.fetchone():
             raise HTTPException(status_code=400, detail="El correo ya está registrado")
 
-        # Hash de contraseña
-        hashed_pw = bcrypt.hashpw(data.contrasena.encode("utf-8"), bcrypt.gensalt())
+        # Hash de contraseña rápido con SHA-256 para soportar alta carga en Render
+        hashed_pw = hashlib.sha256(data.contrasena.encode("utf-8")).hexdigest()
 
         cur.execute(
             """
             INSERT INTO usuarios (nombre, apellido, correo, contrasena, rol_id)
             VALUES (%s, %s, %s, %s, 2) RETURNING id
             """,
-            (data.nombre, data.apellido, data.correo, hashed_pw.decode("utf-8")),
+            (data.nombre, data.apellido, data.correo, hashed_pw),
         )
         conn.commit()
         return {"mensaje": "Usuario registrado correctamente"}
@@ -225,9 +225,10 @@ def login_user(data: Login):
         )
         user = cur.fetchone()
 
-        if not user or not bcrypt.checkpw(
-            data.contrasena.encode("utf-8"), user["contrasena"].encode("utf-8")
-        ):
+        # Verificar contraseña con SHA-256
+        input_pw_hash = hashlib.sha256(data.contrasena.encode("utf-8")).hexdigest()
+
+        if not user or user["contrasena"] != input_pw_hash:
             raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
         cur.execute("UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = %s", (user["id"],))
