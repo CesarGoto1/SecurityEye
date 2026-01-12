@@ -35,17 +35,16 @@ async def register_user(client, index):
             "elapsed": time.time() - start_time,
             "error": str(e)
         }
-
 async def main():
-    print(f"--- INICIANDO PRUEBA DE ESTRÉS: 30 REGISTROS SIMULTÁNEOS (SHA-256) ---")
+    print(f"--- PRUEBA DE ESTRÉS MASIVA: 100 REGISTROS SIMULTÁNEOS ---")
     print(f"Objetivo: {BASE_URL}/register")
     
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        # Lanzamos las 30 peticiones AL MISMO TIEMPO
-        tasks = [register_user(client, i) for i in range(30)]
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        # Lanzamos las 100 peticiones de golpe
+        tasks = [register_user(client, i) for i in range(100)]
         
         start_global = time.time()
-        print("Enviando 30 peticiones concurrentes...")
+        print("Enviando 100 peticiones concurrentes...")
         results = await asyncio.gather(*tasks)
         total_time = time.time() - start_global
 
@@ -55,8 +54,8 @@ async def main():
     
     print(f"\n--- RESULTADOS ---")
     print(f"Tiempo total de ejecución: {total_time:.2f} segundos")
-    print(f"Registros exitosos: {len(success)}/30")
-    print(f"Fallos: {len(failures)}/30")
+    print(f"Registros exitosos: {len(success)}/100")
+    print(f"Fallos: {len(failures)}/100")
     
     if success:
         avg_time = sum(r['elapsed'] for r in success) / len(success)

@@ -1,5 +1,5 @@
 // ==========================================
-// RESUMEN.JS - Página de análisis post-sesión
+// RESUMEN.JS - Página de análisis post-sesión (Con Gráficos)
 // ==========================================
 
 // ==========================================
@@ -8,7 +8,6 @@
 
 let sesionId = null;
 let sesionData = null;
-let diagnosisData = null;
 
 // ==========================================
 // 2. CARGAR DATOS AL INICIAR
@@ -53,7 +52,7 @@ async function cargarDatosSesion() {
 
         sesionData = await response.json();
 
-        // Llenar información de sesión
+        // Llenar información de sesión básica
         const fecha = new Date(sesionData.fecha_inicio).toLocaleDateString('es-ES');
         document.getElementById('sessionDate').textContent = fecha;
 
@@ -64,53 +63,15 @@ async function cargarDatosSesion() {
             `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
 
         document.getElementById('summaryAlerts').textContent = sesionData.alertas || 0;
-        const perclosVal = sesionData.perclos !== null && sesionData.perclos !== undefined
-            ? Number(sesionData.perclos)
-            : 0;
-        document.getElementById('summaryPerclos').textContent = `${perclosVal.toFixed(1)}%`;
-        document.getElementById('summaryKSS').textContent = 
-            sesionData.kss_final || '-';
-
-        // Métricas detalladas
-        document.getElementById('metricBlink').textContent = 
-            (sesionData.sebr || 0) + ' parpadeos';
-        document.getElementById('metricYawns').textContent = 
-            sesionData.num_bostezos || 0;
-        document.getElementById('metricMaxNoBlinkTime').textContent = 
-            sesionData.max_sin_parpadeo || 0;
-        document.getElementById('metricEyeVelocity').textContent = 
-            (sesionData.velocidad_ocular ? sesionData.velocidad_ocular.toFixed(2) : 0) + ' px/s';
-
-        // Info de sesión
-        document.getElementById('metricActivity').textContent = 
-            sesionData.tipo_actividad === 'pdf' ? 'PDF de lectura' : 'Video educativo';
         
+        // Estado General Simplificado
         const estadoFatiga = sesionData.es_fatiga ? 'FATIGA DETECTADA' : 'ESTADO NORMAL';
         const colorEstado = sesionData.es_fatiga ? 'danger' : 'success';
-        document.getElementById('metricFatigueState').innerHTML = 
-            `<span class="badge bg-${colorEstado}">${estadoFatiga}</span>`;
-
-        // Momentos críticos
-        if (sesionData.momentos_fatiga) {
-            if (typeof sesionData.momentos_fatiga === 'string') {
-                try { 
-                    sesionData.momentos_fatiga = JSON.parse(sesionData.momentos_fatiga); 
-                } catch { 
-                    sesionData.momentos_fatiga = []; 
-                }
-            } else if (!Array.isArray(sesionData.momentos_fatiga)) {
-                console.warn('momentos_fatiga no es un array ni un string JSON válido:', sesionData.momentos_fatiga);
-                sesionData.momentos_fatiga = [];
-            }
-        } else {
-            sesionData.momentos_fatiga = []; // Ensure it's always an array for consistency
-        }
+        const icono = sesionData.es_fatiga ? '<i class="bi bi-exclamation-triangle-fill me-2"></i>' : '<i class="bi bi-check-circle-fill me-2"></i>';
         
-        document.getElementById('metricCriticalMoments').textContent = 
-            sesionData.momentos_fatiga.length;
+        document.getElementById('metricFatigueState').innerHTML = 
+            `<span class="badge bg-${colorEstado} fs-6 p-2">${icono}${estadoFatiga}</span>`;
 
-        // Timeline de alertas
-        construirTimelineAlertas(sesionData.momentos_fatiga);
 
         // --- RENDERIZAR DIAGNÓSTICO IA ---
         if (sesionData.diagnostico_json) {
@@ -127,7 +88,7 @@ async function cargarDatosSesion() {
                 document.getElementById('aiGeneralDiagnosis').textContent = 
                     diag.diagnostico_general || "No disponible.";
 
-                // 2. Análisis Biométrico
+                // 2. Análisis Biométrico (Simplificado o filtrado si es necesario)
                 const bioList = document.getElementById('aiBiometricAnalysis');
                 bioList.innerHTML = '';
                 if (diag.analisis_biometrico) {
@@ -181,141 +142,126 @@ async function cargarDatosSesion() {
     }
 }
 
-
-
 // ==========================================
-// 5. CONSTRUIR GRÁFICOS
+// 4. CONSTRUIR GRÁFICOS
 // ==========================================
 
 function construirGraficos() {
     if (!sesionData) return;
 
-    // Gráfico de evolución de fatiga (simulado con datos actuales)
-    const fatigueCtx = document.getElementById('fatigueChart').getContext('2d');
-    new Chart(fatigueCtx, {
+    // --- GRÁFICO 1: EVOLUCIÓN DE FATIGA ---
+    const ctxFatigue = document.getElementById('fatigueChart').getContext('2d');
+    const perclosFinal = sesionData.perclos ? Number(sesionData.perclos) : 0;
+    
+    // Simular puntos de datos para la curva (Inicio -> Medio -> Final)
+    // En un sistema real, usaríamos timestamps de mediciones
+    const dataPoints = [
+        Math.max(0, perclosFinal - 10), // Inicio (estimado más bajo)
+        Math.max(0, perclosFinal - 5),  // Medio
+        perclosFinal * 0.9,
+        perclosFinal                    // Valor final real
+    ];
+
+    new Chart(ctxFatigue, {
         type: 'line',
         data: {
-            labels: ['Inicio', 'Mitad', 'Final'],
+            labels: ['Inicio', 'Progreso', 'Progreso', 'Final'],
             datasets: [{
-                label: 'Nivel PERCLOS (%)',
-                data: [
-                    sesionData.perclos * 0.6,
-                    sesionData.perclos * 0.8,
-                    sesionData.perclos
-                ],
+                label: 'Nivel de Fatiga (%)',
+                data: dataPoints,
                 borderColor: '#3A7D8E',
-                backgroundColor: 'rgba(163, 217, 213, 0.1)',
-                borderWidth: 2,
+                backgroundColor: 'rgba(58, 125, 142, 0.1)',
+                borderWidth: 3,
                 fill: true,
                 tension: 0.4,
-                pointRadius: 5,
-                pointBackgroundColor: '#3A7D8E'
+                pointRadius: 4,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#3A7D8E'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Fatiga: ' + context.parsed.y.toFixed(1) + '%';
+                        }
+                    }
+                }
             },
             scales: {
                 y: {
                     beginAtZero: true,
-                    max: 100
+                    max: 100, // PERCLOS va de 0 a 100
+                    grid: { borderDash: [5, 5] },
+                    ticks: { callback: function(value) { return value + '%' } }
+                },
+                x: {
+                    grid: { display: false }
                 }
             }
         }
     });
 
-    // Gráfico de alertas (si hay datos de momentos)
-    const momentos = sesionData.momentos_fatiga || [];
-    const alertsCtx = document.getElementById('alertsChart').getContext('2d');
+    // --- GRÁFICO 2: DISTRIBUCIÓN DE ALERTAS ---
+    const ctxAlerts = document.getElementById('alertsChart').getContext('2d');
+    let momentos = [];
     
-    const alertReasons = {};
-    momentos.forEach(m => {
-        const reason = m.reason || 'Fatiga';
-        alertReasons[reason] = (alertReasons[reason] || 0) + 1;
-    });
+    // Parseo seguro de momentos_fatiga
+    if (sesionData.momentos_fatiga) {
+        if (typeof sesionData.momentos_fatiga === 'string') {
+            try { momentos = JSON.parse(sesionData.momentos_fatiga); } catch {}
+        } else if (Array.isArray(sesionData.momentos_fatiga)) {
+            momentos = sesionData.momentos_fatiga;
+        }
+    }
 
-    new Chart(alertsCtx, {
+    // Contar razones de alertas
+    const counts = {};
+    if (momentos.length > 0) {
+        momentos.forEach(m => {
+            const r = m.reason || 'Fatiga General';
+            counts[r] = (counts[r] || 0) + 1;
+        });
+    } else {
+        counts['Sin Alertas'] = 1;
+    }
+
+    const labels = Object.keys(counts);
+    const dataValues = Object.values(counts);
+    
+    // Colores para el gráfico de dona
+    const backgroundColors = momentos.length > 0 
+        ? ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
+        : ['#e9ecef']; // Gris si no hay alertas
+
+    new Chart(ctxAlerts, {
         type: 'doughnut',
         data: {
-            labels: Object.keys(alertReasons),
+            labels: labels,
             datasets: [{
-                data: Object.values(alertReasons),
-                backgroundColor: [
-                    'rgba(220, 53, 69, 0.6)',
-                    'rgba(255, 193, 7, 0.6)',
-                    'rgba(76, 175, 80, 0.6)',
-                    'rgba(58, 125, 142, 0.6)'
-                ],
-                borderColor: [
-                    '#dc3545',
-                    '#ffc107',
-                    '#4cab50',
-                    '#3a7d8e'
-                ],
-                borderWidth: 1
+                data: dataValues,
+                backgroundColor: backgroundColors,
+                borderWidth: 0,
+                hoverOffset: 4
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            cutout: '70%',
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: { usePointStyle: true, boxWidth: 8, padding: 15 }
+                },
+                tooltip: {
+                    enabled: momentos.length > 0 // Desactivar tooltip si es placeholder
                 }
             }
         }
     });
-}
-
-// ==========================================
-// 6. CONSTRUIR TIMELINE DE ALERTAS
-// ==========================================
-
-function construirTimelineAlertas(momentos) {
-    const timeline = document.getElementById('alertsTimeline');
-
-    if (!momentos || momentos.length === 0) {
-        timeline.innerHTML = '<div class="no-alerts">No se detectaron momentos críticos</div>';
-        return;
-    }
-
-    timeline.innerHTML = '';
-    momentos.forEach((m, index) => {
-        const minutos = Math.floor(m.t / 60);
-        const segundos = m.t % 60;
-        const tiempo = `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
-
-        const alertItem = document.createElement('div');
-        alertItem.className = 'alert-item';
-        alertItem.innerHTML = `
-            <div>
-                <div class="time">
-                    <i class="bi bi-clock"></i> ${tiempo}
-                </div>
-                <div class="reason">${m.reason || 'Fatiga detectada'}</div>
-            </div>
-            <span class="badge bg-warning text-dark">#${index + 1}</span>
-        `;
-        timeline.appendChild(alertItem);
-    });
-}
-
-// ==========================================
-// 7. FUNCIONES AUXILIARES
-// ==========================================
-
-
-
-// Actualizar fecha de sesión en tiempo real
-function actualizarFechaActual() {
-    const ahora = new Date().toLocaleString('es-ES');
-    document.getElementById('sessionDate').textContent = ahora;
-}
-
-// Exportar resumen como PDF (función futura)
-function exportarPDF() {
-    console.log('Exportar PDF no implementado aún');
 }

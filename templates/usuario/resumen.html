@@ -85,88 +85,27 @@
             </div>
         </div>
 
-        <!-- Summary Stats Row -->
+        <!-- Summary Stats Row (Simplified) -->
         <div class="row g-3 mb-4">
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card-gradient p-4 text-center">
                     <small class="text-muted d-block mb-2">Duración</small>
                     <h3 class="mb-0 fw-bold" id="summaryDuration">00:00</h3>
                     <small class="text-muted">minutos</small>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card-gradient p-4 text-center">
                     <small class="text-muted d-block mb-2">Alertas</small>
                     <h3 class="mb-0 fw-bold" id="summaryAlerts">0</h3>
                     <small class="text-muted">detectadas</small>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card-gradient p-4 text-center">
-                    <small class="text-muted d-block mb-2">Fatiga media</small>
-                    <h3 class="mb-0 fw-bold" id="summaryPerclos">0.0%</h3>
-                    <small class="text-muted">PERCLOS</small>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card-gradient p-4 text-center">
-                    <small class="text-muted d-block mb-2">Somnolencia (KSS)</small>
-                    <h3 class="mb-0 fw-bold" id="summaryKSS">-</h3>
-                    <small class="text-muted">/9</small>
-                </div>
-            </div>
-        </div>
-
-        <!-- Detailed Metrics -->
-        <div class="row g-3 mb-4">
-            <div class="col-lg-6">
-                <div class="card-gradient p-4">
-                    <h5 class="fw-bold mb-3">Métricas detalladas</h5>
-                    <div class="metrics-list">
-                        <div class="metric-row">
-                            <span>Parpadeos promedio</span>
-                            <span class="fw-bold" id="metricBlink">0</span>
-                            <small>/min</small>
-                        </div>
-                        <div class="metric-row">
-                            <span>Bostezos detectados</span>
-                            <span class="fw-bold" id="metricYawns">0</span>
-                        </div>
-                        <div class="metric-row">
-                            <span>Máximo sin parpadear</span>
-                            <span class="fw-bold" id="metricMaxNoBlinkTime">0</span>
-                            <small>seg</small>
-                        </div>
-                        <div class="metric-row">
-                            <span>Velocidad ocular</span>
-                            <span class="fw-bold" id="metricEyeVelocity">0</span>
-                            <small>px/s</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card-gradient p-4">
-                    <h5 class="fw-bold mb-3">Información de sesión</h5>
-                    <div class="metrics-list">
-                        <div class="metric-row">
-                            <span>Tipo de actividad</span>
-                            <span class="fw-bold" id="metricActivity">-</span>
-                        </div>
-                        <div class="metric-row">
-                            <span>Estado de fatiga</span>
-                            <span class="fw-bold" id="metricFatigueState">-</span>
-                        </div>
-                        <div class="metric-row">
-                            <span>Momentos críticos</span>
-                            <span class="fw-bold" id="metricCriticalMoments">0</span>
-                        </div>
-                        <div class="metric-row">
-                            <span>Tiempo desde última alerta</span>
-                            <span class="fw-bold" id="metricLastAlert">-</span>
-                        </div>
-                    </div>
+                    <small class="text-muted d-block mb-2">Estado General</small>
+                    <h3 class="mb-0 fw-bold" id="metricFatigueState">-</h3>
+                    <small class="text-muted">Resultado</small>
                 </div>
             </div>
         </div>
@@ -175,8 +114,8 @@
         <div class="row g-3 mb-4">
             <div class="col-lg-6">
                 <div class="card-gradient p-4">
-                    <h5 class="fw-bold mb-3">Evolución de fatiga</h5>
-                    <div class="chart-container">
+                    <h5 class="fw-bold mb-3">Nivel de Fatiga</h5>
+                    <div class="chart-container" style="position: relative; height: 300px;">
                         <canvas id="fatigueChart"></canvas>
                     </div>
                 </div>
@@ -184,29 +123,13 @@
 
             <div class="col-lg-6">
                 <div class="card-gradient p-4">
-                    <h5 class="fw-bold mb-3">Distribución de alertas</h5>
-                    <div class="chart-container">
+                    <h5 class="fw-bold mb-3">Causas de Alertas</h5>
+                    <div class="chart-container" style="position: relative; height: 300px;">
                         <canvas id="alertsChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
-
-
-
-        <!-- Timeline of Alerts -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card-gradient p-4">
-                    <h5 class="fw-bold mb-3">Momentos de fatiga detectados</h5>
-                    <div id="alertsTimeline" class="alerts-timeline">
-                        <!-- Will be populated dynamically -->
-                    </div>
-                </div>
-            </div>
-        </div>
-
-
 
         <!-- Action Buttons -->
         <div class="row g-2 mb-4">
