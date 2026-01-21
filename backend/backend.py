@@ -325,24 +325,26 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
         # 2. Llamada a N8N (Síncrona ahora, para correr en el ThreadPool)
         payload_to_n8n = {}
         try:
-            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://pepaez.app.n8n.cloud/webhook/7d7ea1f6-78b4-45b0-9d39-2c63eef11f2c")
+            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://drteneguznay.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
             log.info("--- INICIO LLAMADA A N8N (SYNC) ---")
 
             if n8n_webhook_url:
                 # Asegurarse de que todos los valores sean del tipo correcto (int, float, etc.)
-                payload_to_n8n = {
-                    "resumen_sesion": {
-                        "tiempo_total_seg": int(data.tiempo_total_seg or 0),
-                        "perclos": float(data.perclos or 0.0),
-                        "sebr": int(data.sebr or 0),
-                        "blink_rate_min": float(data.blink_rate_min or 0.0),
-                        "pct_incompletos": float(data.pct_incompletos or 0.0),
-                        "num_bostezos": int(data.num_bostezos or 0),
-                        "velocidad_ocular": float(data.velocidad_ocular or 0.0),
-                        "alertas_totales": int(data.alertas or 0),
-                        "kss_final": int(data.kss_final or 0),
-                    }
+                resumen_sesion_payload = {
+                    "tiempo_total_seg": int(data.tiempo_total_seg or 0),
+                    "perclos": float(data.perclos or 0.0),
+                    "sebr": int(data.sebr or 0),
+                    "blink_rate_min": float(data.blink_rate_min or 0.0),
+                    "pct_incompletos": float(data.pct_incompletos or 0.0),
+                    "num_bostezos": int(data.num_bostezos or 0),
+                    "velocidad_ocular": float(data.velocidad_ocular or 0.0),
+                    "alertas_totales": int(data.alertas or 0),
                 }
+                # El KSS solo se envía si tiene un valor válido (mayor que 0)
+                if data.kss_final is not None and data.kss_final > 0:
+                    resumen_sesion_payload["kss_final"] = int(data.kss_final)
+                
+                payload_to_n8n = {"resumen_sesion": resumen_sesion_payload}
                 log.info(f"Payload enviado a N8N: {json.dumps(payload_to_n8n)}")
 
                 # Usamos Client síncrono
