@@ -288,6 +288,7 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
     La llamada a N8N se hace con httpx.Client (síncrono) dentro de este hilo.
     """
     diagnostico_ia = None
+    payload_to_n8n = {}
     
     try:
         cur = db.cursor(cursor_factory=extras.RealDictCursor)
@@ -320,34 +321,38 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
             nivel_val, estado_txt, data.max_sin_parpadeo, data.alertas, momentos_json, data.kss_final
         ))
 
-        payload_to_n8n = {}
 
         # 2. Llamada a N8N (Síncrona ahora, para correr en el ThreadPool)
+        payload_to_n8n = {}
         try:
             n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://pepaez.app.n8n.cloud/webhook/7d7ea1f6-78b4-45b0-9d39-2c63eef11f2c")
             log.info("--- INICIO LLAMADA A N8N (SYNC) ---")
 
             if n8n_webhook_url:
-                # Asegurarse de que no se envíen valores nulos a n8n
+                # Asegurarse de que todos los valores sean del tipo correcto (int, float, etc.)
                 payload_to_n8n = {
                     "resumen_sesion": {
-                        "tiempo_total_seg": data.tiempo_total_seg or 0,
+                        "tiempo_total_seg": int(data.tiempo_total_seg or 0),
                         "perclos": float(data.perclos or 0.0),
-                        "sebr": data.sebr or 0,
+                        "sebr": int(data.sebr or 0),
                         "blink_rate_min": float(data.blink_rate_min or 0.0),
                         "pct_incompletos": float(data.pct_incompletos or 0.0),
-                        "num_bostezos": data.num_bostezos or 0,
+                        "num_bostezos": int(data.num_bostezos or 0),
                         "velocidad_ocular": float(data.velocidad_ocular or 0.0),
-                        "alertas_totales": data.alertas or 0,
-                        "kss_final": data.kss_final or 0,
+                        "alertas_totales": int(data.alertas or 0),
+                        "kss_final": int(data.kss_final or 0),
                     }
                 }
+                log.info(f"Payload enviado a N8N: {json.dumps(payload_to_n8n)}")
 
                 # Usamos Client síncrono
                 with httpx.Client() as client:
                     response = client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
+                    log.info(f"N8N Status Code: {response.status_code}")
+                    log.info(f"N8N Response Content: {response.text}")
                     response.raise_for_status()
                     responseData = response.json()
+                    log.info(f"N8N Parsed JSON: {responseData}")
 
                     diagnostico_ia = None
                     if isinstance(responseData, list) and responseData:
@@ -360,11 +365,16 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
                         diagnostico_ia = responseData
 
                 if diagnostico_ia and sesion_id:
-                    cur.execute(
-                        "INSERT INTO diagnosticos_ia (sesion_id, diagnostico_json) VALUES (%s, %s) ON CONFLICT (sesion_id) DO UPDATE SET diagnostico_json = EXCLUDED.diagnostico_json",
-                        (sesion_id, json.dumps(diagnostico_ia))
-                    )
-                    log.info("Diagnóstico IA guardado.")
+                    try:
+                        diagnostico_json = json.dumps(diagnostico_ia)
+                        cur.execute(
+                            "INSERT INTO diagnosticos_ia (sesion_id, diagnostico_json) VALUES (%s, %s) ON CONFLICT (sesion_id) DO UPDATE SET diagnostico_json = EXCLUDED.diagnostico_json",
+                            (sesion_id, diagnostico_json)
+                        )
+                        log.info("Diagnóstico IA guardado.")
+                    except (TypeError, ValueError) as e:
+                        log.error(f"Error serializando diagnostico_ia: {e}")
+                        log.error(f"Tipo de diagnostico_ia: {type(diagnostico_ia)}, Contenido: {diagnostico_ia}")
 
         except httpx.HTTPStatusError as e:
             log.error(f"!!! ERROR HTTP LLAMADA N8N: {e}")
