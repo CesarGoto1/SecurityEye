@@ -345,7 +345,18 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
                     response = client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
                     response.raise_for_status()
                     responseData = response.json()
-                    diagnostico_ia = responseData[0]['json'] if isinstance(responseData, list) and responseData and 'json' in responseData[0] else responseData
+                    diagnostico_ia = None
+                    if isinstance(responseData, list) and responseData:
+                        if isinstance(responseData[0], dict) and 'json' in responseData[0]:
+                            # Old n8n structure: [{"json": {...}}]
+                            diagnostico_ia = responseData[0]['json']
+                        elif isinstance(responseData[0], dict):
+                            # New n8n structure (list containing the dict): [{...}]
+                            diagnostico_ia = responseData[0]
+                    
+                    if diagnostico_ia is None:
+                        # Fallback for direct dict or other unexpected formats
+                        diagnostico_ia = responseData
 
                 if diagnostico_ia and sesion_id:
                     cur.execute(
