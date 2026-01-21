@@ -326,17 +326,18 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
             log.info(f"--- INICIO LLAMADA A N8N (SYNC) ---")
             
             if n8n_webhook_url:
+                # Asegurarse de que no se envíen valores nulos a n8n
                 payload_to_n8n = {
                     "resumen_sesion": {
-                        "tiempo_total_seg": data.tiempo_total_seg,
-                        "perclos": float(data.perclos),
-                        "sebr": data.sebr,
-                        "blink_rate_min": float(data.blink_rate_min),
-                        "pct_incompletos": float(data.pct_incompletos),
-                        "num_bostezos": data.num_bostezos,
-                        "velocidad_ocular": float(data.velocidad_ocular),
-                        "alertas_totales": data.alertas,
-                        "kss_final": data.kss_final
+                        "tiempo_total_seg": data.tiempo_total_seg or 0,
+                        "perclos": float(data.perclos or 0.0),
+                        "sebr": data.sebr or 0,
+                        "blink_rate_min": float(data.blink_rate_min or 0.0),
+                        "pct_incompletos": float(data.pct_incompletos or 0.0),
+                        "num_bostezos": data.num_bostezos or 0,
+                        "velocidad_ocular": float(data.velocidad_ocular or 0.0),
+                        "alertas_totales": data.alertas or 0,
+                        "kss_final": data.kss_final or 0
                     }
                 }
                 
@@ -344,9 +345,9 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
                 with httpx.Client() as client:
                     response = client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
                     response.raise_for_status()
-                    log.info(f"--- N8N Raw Response Text: {response.text} ---") # Added log
+                    log.info(f"--- N8N Raw Response Text: {response.text} ---") 
                     responseData = response.json()
-                    log.info(f"--- N8N Parsed Response Data: {responseData} ---") # Added log
+                    log.info(f"--- N8N Parsed Response Data: {responseData} ---") 
 
                     diagnostico_ia = None
                     if isinstance(responseData, list) and responseData:
@@ -361,7 +362,7 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
                         # Fallback for direct dict or other unexpected formats
                         diagnostico_ia = responseData
                     
-                    log.info(f"--- Final Diagnostico IA after parsing: {diagnostico_ia} ---") # Added log
+                    log.info(f"--- Final Diagnostico IA after parsing: {diagnostico_ia} ---")
 
                 if diagnostico_ia and sesion_id:
                     cur.execute(
@@ -375,7 +376,8 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
             # No fallamos la request principal si N8N falla, solo logueamos
 
         # 3. Cerrar Sesión en BD
-        summary_json = json.dumps(diagnostico_ia) if diagnostico_ia else None
+        # El usuario ha clarificado que 'resumen' debe guardar los datos de la sesión, no el diagnóstico.
+        summary_json = json.dumps(payload_to_n8n.get("resumen_sesion")) if payload_to_n8n.get("resumen_sesion") else None
         cur.execute(
             """
             UPDATE sesiones 
