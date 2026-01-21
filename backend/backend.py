@@ -344,7 +344,10 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
                 with httpx.Client() as client:
                     response = client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
                     response.raise_for_status()
+                    log.info(f"--- N8N Raw Response Text: {response.text} ---") # Added log
                     responseData = response.json()
+                    log.info(f"--- N8N Parsed Response Data: {responseData} ---") # Added log
+
                     diagnostico_ia = None
                     if isinstance(responseData, list) and responseData:
                         if isinstance(responseData[0], dict) and 'json' in responseData[0]:
@@ -357,6 +360,8 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
                     if diagnostico_ia is None:
                         # Fallback for direct dict or other unexpected formats
                         diagnostico_ia = responseData
+                    
+                    log.info(f"--- Final Diagnostico IA after parsing: {diagnostico_ia} ---") # Added log
 
                 if diagnostico_ia and sesion_id:
                     cur.execute(
