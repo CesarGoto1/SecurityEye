@@ -3,19 +3,26 @@ import httpx
 import time
 import random
 import string
-import os
+import statistics
 
-# URL de tu servidor local
+# URL de tu servidor local o producción
 BASE_URL = "https://securityeye.onrender.com"
 
+# Variables de la Prueba según el Artículo
+N_USUARIOS = 100       # N (Usuarios concurrentes)
+TIMEOUT_SECONDS = 120.0
+
 def generate_user(index):
-    # Generar un correo único para evitar errores de duplicidad
+    """
+    Genera datos de usuario únicos para la prueba de esfuerzo.
+    """
     suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
     return {
-        "nombre": f"StressUser{index}",
+        "nombre": f"StressUser_{index}",
         "apellido": "Test",
         "correo": f"stress_{index}_{suffix}@test.com",
-        "contrasena": "Password123!"
+        "contrasena": "Password123!",
+        "metadata_carga": "x" * 500  # Carga de datos (D) ligera para el registro
     }
 
 async def register_user(client, index):
@@ -27,44 +34,45 @@ async def register_user(client, index):
         return {
             "status": response.status_code,
             "elapsed": elapsed,
-            "error": None
+            "success": response.status_code in [200, 201]
         }
     except Exception as e:
         return {
             "status": 0,
             "elapsed": time.time() - start_time,
+            "success": False,
             "error": str(e)
         }
+
 async def main():
-    print(f"--- PRUEBA DE ESTRÉS MASIVA: 100 REGISTROS SIMULTÁNEOS ---")
-    print(f"Objetivo: {BASE_URL}/register")
+    print(f"--- PRUEBA DE ESFUERZO: REGISTRO DE USUARIOS ---")
+    print(f"Objetivo: Evaluar estabilidad del sistema (N={N_USUARIOS})")
+    print(f"Endpoint: {BASE_URL}/register")
     
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        # Lanzamos las 100 peticiones de golpe
-        tasks = [register_user(client, i) for i in range(100)]
+    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+        # Lanzamos las 100 peticiones de golpe para forzar el límite operacional
+        tasks = [register_user(client, i) for i in range(N_USUARIOS)]
         
         start_global = time.time()
-        print("Enviando 100 peticiones concurrentes...")
+        print(f"Enviando {N_USUARIOS} registros concurrentes...")
         results = await asyncio.gather(*tasks)
         total_time = time.time() - start_global
 
-    # Análisis de resultados
-    success = [r for r in results if r["status"] == 200]
-    failures = [r for r in results if r["status"] != 200]
+    # Análisis de Resultados
+    success_count = sum(1 for r in results if r["success"])
+    times = [r["elapsed"] for r in results]
+    integrity = (success_count / N_USUARIOS) * 100
     
-    print(f"\n--- RESULTADOS ---")
-    print(f"Tiempo total de ejecución: {total_time:.2f} segundos")
-    print(f"Registros exitosos: {len(success)}/100")
-    print(f"Fallos: {len(failures)}/100")
-    
-    if success:
-        avg_time = sum(r['elapsed'] for r in success) / len(success)
-        print(f"Tiempo promedio por registro exitoso: {avg_time:.4f} segundos")
-    
-    if failures:
-        print("\nDetalle de fallos (Primeros 3):")
-        for i, f in enumerate(failures[:3]):
-             print(f"Fallo {i+1}: Status={f['status']}, Error='{f['error']}'")
+    print("\n" + "="*40)
+    print(f"RESULTADOS DE CARGA (REGISTRO)")
+    print("-" * 40)
+    print(f"Total Intentos (N):     {N_USUARIOS}")
+    print(f"Registros Exitosos:     {success_count}")
+    print(f"Integridad de Datos:    {integrity:.1f}%")
+    print(f"Tiempo Respuesta Prom:  {statistics.mean(times):.4f}s")
+    print(f"Tiempo Procesamiento Max:{max(times):.4f}s")
+    print(f"Tiempo Total Ejecución: {total_time:.2f}s")
+    print("="*40)
 
 if __name__ == "__main__":
     asyncio.run(main())

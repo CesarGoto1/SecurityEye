@@ -1,15 +1,16 @@
 import os
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from starlette.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import httpx
 import json
-import urllib.parse # Importar para parsear la URL de la base de datos
-
+import urllib.parse
+import hashlib
 import psycopg2
 from psycopg2 import pool, extras
-import hashlib
 
 # Configuración de logs
 logging.basicConfig(level=logging.INFO)
@@ -26,31 +27,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- SERVIR ARCHIVOS ESTÁTICOS Y PÁGINAS HTML ---
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os # Asegurarse de que os está importado
-
-# Montar directorio estático para CSS, JS, etc.
-# La ruta 'static' es relativa a la raíz del proyecto desde donde se ejecuta el servidor.
+# --- SERVIR ARCHIVOS ESTÁTICOS ---
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", include_in_schema=False)
-async def serve_root_index():
+def serve_root_index():
     return FileResponse("templates/index.html")
 
 @app.get("/{page}.html", include_in_schema=False)
-async def serve_root_pages(page: str):
+def serve_root_pages(page: str):
     file_path = f"templates/{page}.html"
     if os.path.exists(file_path):
         return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="Page not found")
 
 @app.get("/usuario/{page:path}", include_in_schema=False)
-async def serve_usuario_pages(page: str):
+def serve_usuario_pages(page: str):
     file_path = f"templates/usuario/{page}"
     if not os.path.exists(file_path) or os.path.isdir(file_path):
-        # Si la ruta es un directorio, intentar servir index.html dentro de él
         index_path = os.path.join(file_path, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)
@@ -59,7 +53,7 @@ async def serve_usuario_pages(page: str):
     raise HTTPException(status_code=404, detail="Page not found")
 
 @app.get("/admin/{page:path}", include_in_schema=False)
-async def serve_admin_pages(page: str):
+def serve_admin_pages(page: str):
     file_path = f"templates/admin/{page}"
     if not os.path.exists(file_path) or os.path.isdir(file_path):
         index_path = os.path.join(file_path, "index.html")
@@ -84,11 +78,11 @@ class Register(BaseModel):
 class FatigueResult(BaseModel):
     sesion_id: int | None = None
     usuario_id: int
-    actividad: str  # 'pdf' | 'video'
+    actividad: str
     sebr: int
     blink_rate_min: float
     perclos: float
-    ear_promedio: float | None = None # Añadido
+    ear_promedio: float | None = None
     pct_incompletos: float
     tiempo_cierre: float
     num_bostezos: int
@@ -111,8 +105,14 @@ class DashboardRequest(BaseModel):
 
 class DetailRequest(BaseModel):
     sesion_id: int
+    
+class RegistroDescanso(BaseModel):
+    sesion_id: int
+    actividad_id: int
+    actividad_nombre: str
+    duracion_seg: int
 
-# --- BASE DE DATOS ---
+# --- BASE DE DATOS Y DEPENDENCIAS ---
 @app.on_event("startup")
 def startup():
     try:
@@ -122,22 +122,16 @@ def startup():
             parsed_url = urllib.parse.urlparse(database_url)
             db_config = {
                 "host": parsed_url.hostname,
-                "port": parsed_url.port or 5432, # Default to 5432 if port is not in URL
+                "port": parsed_url.port or 5432,
                 "database": parsed_url.path.strip("/"),
                 "user": parsed_url.username,
                 "password": parsed_url.password,
             }
         else:
-            # Fallback a variables individuales (formato antiguo)
-            db_config = {
-                "host": os.getenv("DB_HOST", "127.0.0.1"),
-                "port": int(os.getenv("DB_PORT", "5432")),
-                "database": os.getenv("DB_NAME", "pry_lectura1"),
-                "user": os.getenv("DB_USER", "postgres"),
-                "password": os.getenv("DB_PASS", "123"),
-            }
+            raise ValueError("DATABASE_URL environment variable is not set. Database connection cannot be established.")
         
-        app.state.db_pool = pool.SimpleConnectionPool(1, 10, **db_config)
+        # SimpleConnectionPool es thread-safe
+        app.state.db_pool = pool.SimpleConnectionPool(1, 20, **db_config)
         log.info("Conexión a base de datos establecida.")
     except Exception as e:
         log.exception("Error conectando a PostgreSQL")
@@ -149,43 +143,42 @@ def shutdown():
     if db_pool:
         db_pool.closeall()
 
-def _get_conn_from_pool():
+# INYECCIÓN DE DEPENDENCIA (NUEVO)
+# Maneja automáticamente el ciclo de vida de la conexión para cada request
+def get_db():
     db_pool = getattr(app.state, "db_pool", None)
     if not db_pool:
         raise HTTPException(status_code=500, detail="Conexión BD no disponible")
+    
     conn = db_pool.getconn()
     try:
-        # Establecer el huso horario para esta sesión de conexión
-        # 'America/Guayaquil' es preferible por ser el nombre de la zona horaria.
+        # Configurar zona horaria por conexión
         with conn.cursor() as cur:
             cur.execute("SET TIME ZONE 'America/Guayaquil'")
-        conn.commit() # Necesario para que el SET TIME ZONE sea efectivo en la conexión devuelta
-    except Exception as e:
-        log.error(f"Error al establecer el huso horario en la conexión: {e}")
-        _put_conn_back(conn) # Devolver la conexión si falla
+        yield conn
+    except Exception:
+        # Si ocurre un error no manejado, hacemos rollback por seguridad
+        conn.rollback()
         raise
-    return conn
-
-def _put_conn_back(conn):
-    db_pool = getattr(app.state, "db_pool", None)
-    if db_pool:
+    finally:
+        # Devolver conexión al pool siempre
         db_pool.putconn(conn)
 
+
 # --- ENDPOINTS AUTH ---
+# Nota: Quitamos 'async' para que corran en ThreadPool (mejor para psycopg2)
+
 @app.post("/register")
-def register_user(data: Register):
-    conn = None
-    cur = None
+def register_user(data: Register, db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
 
         # Verificar correo único
         cur.execute("SELECT 1 FROM usuarios WHERE correo = %s", (data.correo,))
         if cur.fetchone():
             raise HTTPException(status_code=400, detail="El correo ya está registrado")
 
-        # Hash de contraseña rápido con SHA-256 para soportar alta carga en Render
+        # Hash de contraseña
         hashed_pw = hashlib.sha256(data.contrasena.encode("utf-8")).hexdigest()
 
         cur.execute(
@@ -195,23 +188,20 @@ def register_user(data: Register):
             """,
             (data.nombre, data.apellido, data.correo, hashed_pw),
         )
-        conn.commit()
+        db.commit()
         return {"mensaje": "Usuario registrado correctamente"}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
-        log.exception("Error en /register") # Loguear el traceback completo
-        if conn:
-            conn.rollback()
+        log.exception("Error en /register")
+        db.rollback()
         raise HTTPException(status_code=500, detail="Error servidor")
-    finally:
-        if conn:
-            _put_conn_back(conn)
 
 @app.post("/login")
-def login_user(data: Login):
-    conn = None
+def login_user(data: Login, db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
 
         cur.execute(
             """
@@ -225,16 +215,15 @@ def login_user(data: Login):
         )
         user = cur.fetchone()
 
-        # Verificar contraseña con SHA-256
+        # Verificar contraseña
         input_pw_hash = hashlib.sha256(data.contrasena.encode("utf-8")).hexdigest()
 
         if not user or user["contrasena"] != input_pw_hash:
             raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
         cur.execute("UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = %s", (user["id"],))
-        conn.commit()
+        db.commit()
 
-        # Normalizar el nombre del rol para que coincida con el frontend
         rol_normalizado = "admin" if user["rol_nombre"] == "Administrador" else "usuario"
 
         return {
@@ -247,38 +236,29 @@ def login_user(data: Login):
             },
         }
     except HTTPException:
-        if conn:
-            conn.rollback()
+        db.rollback()
         raise
     except Exception:
-        if conn:
-            conn.rollback()
+        db.rollback()
         raise HTTPException(status_code=500, detail="Error interno")
-    finally:
-        if conn:
-            _put_conn_back(conn)
 
 # --- ENDPOINTS DATOS ---
+
 @app.post("/create-session")
-async def create_session(data: dict):
+def create_session(data: dict, db = Depends(get_db)):
     """
     Crea una nueva sesión de monitoreo continuo.
-    Input: {usuario_id, tipo_actividad, fuente (opcional)}
-    Output: {sesion_id}
     """
-    conn = None
     try:
         usuario_id = data.get('usuario_id')
-        tipo_actividad = data.get('tipo_actividad')  # 'pdf' | 'video'
+        tipo_actividad = data.get('tipo_actividad')
         fuente = data.get('fuente', '')
 
         if not usuario_id or not tipo_actividad:
             raise HTTPException(status_code=400, detail="Faltan parámetros: usuario_id y tipo_actividad")
 
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
 
-        # Insertar nueva sesión
         cur.execute(
             """
             INSERT INTO sesiones (usuario_id, tipo_actividad, fuente, fecha_inicio)
@@ -288,33 +268,33 @@ async def create_session(data: dict):
             (usuario_id, tipo_actividad, fuente)
         )
         sesion = cur.fetchone()
-        conn.commit()
+        db.commit()
 
         return {"sesion_id": sesion['id']}
 
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
-        if conn:
-            conn.rollback()
+        db.rollback()
         log.exception("Error creando sesión")
         raise HTTPException(status_code=500, detail=f"Error creando sesión: {str(e)}")
-    finally:
-        if conn:
-            _put_conn_back(conn)
 
 @app.post("/save-fatigue")
-async def save_fatigue(data: FatigueResult):
-    conn = None
+def save_fatigue(data: FatigueResult, db = Depends(get_db)):
+    """
+    Guarda el resultado final y consulta N8N.
+    Se ha cambiado a 'def' (síncrono) para evitar bloqueos del event loop por psycopg2.
+    La llamada a N8N se hace con httpx.Client (síncrono) dentro de este hilo.
+    """
     diagnostico_ia = None
     
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
 
         sesion_id = data.sesion_id
         if not sesion_id:
-            # Fallback por si no llega sesion_id (no debería ocurrir en flujo normal)
+            # Fallback
             cur.execute("SELECT id FROM sesiones WHERE usuario_id = %s AND fecha_fin IS NULL ORDER BY id DESC LIMIT 1", (data.usuario_id,))
             row = cur.fetchone()
             if row:
@@ -322,12 +302,11 @@ async def save_fatigue(data: FatigueResult):
             else:
                 raise HTTPException(status_code=404, detail="No se encontró una sesión activa para finalizar.")
 
-        # 1. Guardar medición ÚNICA (Resumen de toda la sesión)
+        # 1. Guardar medición ÚNICA
         estado_txt = "FATIGA" if data.es_fatiga else "NORMAL"
         nivel_val = 1 if data.es_fatiga else 0
         momentos_json = json.dumps(data.momentos_fatiga) if data.momentos_fatiga else None
 
-        # Insertamos una sola fila que representa el promedio/total de la sesión
         query = """
             INSERT INTO mediciones (
                 sesion_id, actividad, parpadeos, blink_rate_min, perclos, ear_promedio, pct_incompletos,
@@ -341,11 +320,10 @@ async def save_fatigue(data: FatigueResult):
             nivel_val, estado_txt, data.max_sin_parpadeo, data.alertas, momentos_json, data.kss_final
         ))
 
-        # 2. Llamada a N8N para diagnóstico
+        # 2. Llamada a N8N (Síncrona ahora, para correr en el ThreadPool)
         try:
             n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://cesarandresgoto.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
-            log.info(f"--- INICIO INTENTO DE LLAMADA A N8N ---")
-            log.info(f"URL Objetivo: {n8n_webhook_url}")
+            log.info(f"--- INICIO LLAMADA A N8N (SYNC) ---")
             
             if n8n_webhook_url:
                 payload_to_n8n = {
@@ -361,35 +339,24 @@ async def save_fatigue(data: FatigueResult):
                         "kss_final": data.kss_final
                     }
                 }
-                log.info(f"Payload preparado para N8N: {json.dumps(payload_to_n8n, indent=2)}")
                 
-                async with httpx.AsyncClient() as client:
-                    log.info("Enviando POST request a N8N...")
-                    response = await client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
-                    log.info(f"Respuesta recibida de N8N. Status Code: {response.status_code}")
-                    
+                # Usamos Client síncrono
+                with httpx.Client() as client:
+                    response = client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
                     response.raise_for_status()
                     responseData = response.json()
-                    log.info(f"Cuerpo de respuesta N8N: {responseData}")
-                    
                     diagnostico_ia = responseData[0]['json'] if isinstance(responseData, list) and responseData and 'json' in responseData[0] else responseData
 
                 if diagnostico_ia and sesion_id:
-                    log.info("Guardando diagnóstico IA en base de datos...")
                     cur.execute(
                         "INSERT INTO diagnosticos_ia (sesion_id, diagnostico_json) VALUES (%s, %s) ON CONFLICT (sesion_id) DO UPDATE SET diagnostico_json = EXCLUDED.diagnostico_json",
                         (sesion_id, json.dumps(diagnostico_ia))
                     )
-                    log.info("Diagnóstico IA guardado correctamente.")
+                    log.info("Diagnóstico IA guardado.")
             
-            log.info(f"--- FIN EXITOSO LLAMADA A N8N ---")
-
-        except httpx.HTTPStatusError as e:
-            log.error(f"!!! ERROR HTTP N8N: {e.response.status_code} - {e.response.text}")
-        except httpx.RequestError as e:
-             log.error(f"!!! ERROR DE CONEXIÓN N8N: {e}")
         except Exception as e:
-            log.exception(f"!!! ERROR GENERAL LLAMADA N8N: {e}")
+            log.exception(f"!!! ERROR LLAMADA N8N: {e}")
+            # No fallamos la request principal si N8N falla, solo logueamos
 
         # 3. Cerrar Sesión en BD
         summary_json = json.dumps(diagnostico_ia) if diagnostico_ia else None
@@ -407,7 +374,7 @@ async def save_fatigue(data: FatigueResult):
             (data.tiempo_total_seg, data.alertas, data.kss_final, data.es_fatiga, summary_json, sesion_id)
         )
 
-        conn.commit()
+        db.commit()
         
         return {
             "mensaje": "Sesión finalizada y guardada correctamente",
@@ -416,19 +383,14 @@ async def save_fatigue(data: FatigueResult):
         }
 
     except Exception as e:
-        if conn: conn.rollback()
+        db.rollback()
         log.exception("Error en save_fatigue")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn: _put_conn_back(conn)
 
-# --- ENDPOINT: HISTORIAL DIRECTO DE BD ---
 @app.post("/get-user-history")
-def get_user_history(data: DashboardRequest):
-    conn = None
+def get_user_history(data: DashboardRequest, db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
 
         query = """
             SELECT
@@ -455,20 +417,17 @@ def get_user_history(data: DashboardRequest):
         if not historial:
             return {"empty": True}
 
-        # Calcular promedios de sesiones continuas
+        # Deduplicar sesiones (aunque la query ya debería traer 1 por 1 si la estructura es correcta, 
+        # mantenemos lógica original por seguridad)
         sesiones_unicas = {h["sesion_id"]: h for h in historial}.values()
 
         def _to_float(val):
-            try:
-                return float(val) if val is not None else 0.0
-            except Exception:
-                return 0.0
+            try: return float(val) if val is not None else 0.0
+            except: return 0.0
 
         def _to_int(val):
-            try:
-                return int(val) if val is not None else 0
-            except Exception:
-                return 0
+            try: return int(val) if val is not None else 0
+            except: return 0
 
         avg_perclos = (
             sum(_to_float(s.get("perclos")) for s in sesiones_unicas) / len(sesiones_unicas)
@@ -486,14 +445,9 @@ def get_user_history(data: DashboardRequest):
     except Exception as e:
         log.exception("Error historial")
         return {"error": str(e)}
-    finally:
-        if conn:
-            _put_conn_back(conn)
 
-# --- NUEVOS ENDPOINTS PARA SESIONES CONTINUAS ---
 @app.get("/actividades-descanso")
 def get_actividades_descanso():
-    """Retorna las 3 actividades de descanso predefinidas"""
     actividades = [
         {"id": 1, "nombre": "20-20-20", "duracion_seg": 20, "instrucciones": "Mira algo a 6m por 20 segundos"},
         {"id": 2, "nombre": "Ejercicio ocular", "duracion_seg": 30, "instrucciones": "Realiza círculos con los ojos 10 veces"},
@@ -501,21 +455,10 @@ def get_actividades_descanso():
     ]
     return {"actividades": actividades}
 
-class RegistroDescanso(BaseModel):
-    sesion_id: int
-    actividad_id: int
-    actividad_nombre: str
-    duracion_seg: int
-
 @app.post("/registrar-descanso")
-def registrar_actividad_descanso(data: RegistroDescanso):
-    """Registra que el usuario realizó una actividad de descanso durante la sesión"""
-    conn = None
+def registrar_actividad_descanso(data: RegistroDescanso, db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor()
-        
-        # Guardar la actividad dentro de sesiones.resumen como array JSON
+        cur = db.cursor()
         cur.execute(
             """
             UPDATE sesiones
@@ -532,46 +475,32 @@ def registrar_actividad_descanso(data: RegistroDescanso):
             """,
             (data.actividad_id, data.actividad_nombre, data.duracion_seg, data.sesion_id)
         )
-        conn.commit()
-        
-        log.info(f"Actividad de descanso registrada: {data.actividad_nombre} en sesión {data.sesion_id}")
+        db.commit()
+        log.info(f"Descanso registrado: {data.actividad_nombre} sesión {data.sesion_id}")
         return {"mensaje": "Actividad de descanso registrada", "exito": True}
-        
     except Exception as e:
-        if conn: conn.rollback()
-        log.exception("Error registrando actividad de descanso")
+        db.rollback()
+        log.exception("Error registrando descanso")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn: _put_conn_back(conn)
 
 @app.post("/end-session/{sesion_id}")
-def end_session(sesion_id: int):
-    """Finalizar una sesión manualmente"""
-    conn = None
+def end_session(sesion_id: int, db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor()
+        cur = db.cursor()
         cur.execute(
             "UPDATE sesiones SET fecha_fin = NOW() WHERE id = %s AND fecha_fin IS NULL",
             (sesion_id,)
         )
-        conn.commit()
+        db.commit()
         return {"mensaje": "Sesión finalizada"}
     except Exception as e:
-        if conn: conn.rollback()
-        log.exception("Error end_session")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn: _put_conn_back(conn)
 
 @app.get("/sesiones/{sesion_id}")
-def get_sesion_details(sesion_id: int):
-    """Obtener detalles de una sesión continua"""
-    conn = None
+def get_sesion_details(sesion_id: int, db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
-        
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
         cur.execute(
             """
             SELECT 
@@ -597,40 +526,25 @@ def get_sesion_details(sesion_id: int):
         resultado = cur.fetchone()
         return resultado if resultado else {"error": "Sesión no encontrada"}
     except Exception as e:
-        log.exception("Error get_sesion_details")
         return {"error": str(e)}
-    finally:
-        if conn: _put_conn_back(conn)
 
-
-# --- ENDPOINT: OBTENER O CREAR DIAGNÓSTICO IA ---
 @app.post("/get-or-create-diagnosis")
-async def get_or_create_diagnosis(data: DetailRequest):
-    conn = None
+def get_or_create_diagnosis(data: DetailRequest, db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
 
-        # 1. Verificar si ya existe un diagnóstico
+        # 1. Verificar si existe
         cur.execute("SELECT diagnostico_json FROM diagnosticos_ia WHERE sesion_id = %s", (data.sesion_id,))
         existing_diagnosis = cur.fetchone()
         if existing_diagnosis and existing_diagnosis['diagnostico_json']:
-            log.info(f"Devolviendo diagnóstico existente para sesion_id: {data.sesion_id}")
             return existing_diagnosis['diagnostico_json']
 
-        # 2. Flujo continuo: tomar la medición más reciente de la sesión (sin etapas)
-        log.info(f"Generando diagnóstico para sesión continua: {data.sesion_id}")
+        # 2. Obtener datos
         query = """
             SELECT 
-                s.usuario_id,
-                m.perclos,
-                m.parpadeos AS sebr,
-                m.pct_incompletos,
-                m.tiempo_cierre,
-                m.num_bostezos,
-                m.velocidad_ocular,
-                m.nivel_subjetivo,
-                m.alertas
+                s.usuario_id, m.perclos, m.parpadeos AS sebr, m.pct_incompletos,
+                m.tiempo_cierre, m.num_bostezos, m.velocidad_ocular,
+                m.nivel_subjetivo, m.alertas
             FROM mediciones m
             JOIN sesiones s ON m.sesion_id = s.id
             WHERE m.sesion_id = %s
@@ -641,9 +555,9 @@ async def get_or_create_diagnosis(data: DetailRequest):
         measurement = cur.fetchone()
 
         if not measurement:
-            raise HTTPException(status_code=404, detail="Sin mediciones para esta sesión continua.")
+            raise HTTPException(status_code=404, detail="Sin mediciones.")
 
-        # 3. Generar diagnóstico simple local basado en umbrales
+        # 3. Diagnóstico simple local
         perclos = float(measurement.get('perclos') or 0)
         sebr = float(measurement.get('sebr') or 0)
         pct_inc = float(measurement.get('pct_incompletos') or 0)
@@ -664,90 +578,51 @@ async def get_or_create_diagnosis(data: DetailRequest):
         if alertas >= 2: score += 2
 
         severidad = 'NORMAL'
-        if score >= 7:
-            severidad = 'ALTA'
-        elif score >= 4:
-            severidad = 'MODERADA'
+        if score >= 7: severidad = 'ALTA'
+        elif score >= 4: severidad = 'MODERADA'
 
         diagnostico_generado = {
             "diagnostico_general": "Fatiga detectada" if score >= 3 else "Estado normal",
             "severidad_fatiga_final": severidad,
             "recomendaciones_generales": [
                 "Aplica la regla 20-20-20",
-                "Parpadea conscientemente cada 20s",
-                "Toma un descanso de 2-3 minutos"
+                "Parpadea conscientemente",
+                "Toma un descanso"
             ]
         }
 
-        # 4. Guardar diagnóstico generado
+        # 4. Guardar
         cur.execute(
             "INSERT INTO diagnosticos_ia (sesion_id, diagnostico_json) VALUES (%s, %s) ON CONFLICT (sesion_id) DO UPDATE SET diagnostico_json = EXCLUDED.diagnostico_json",
             (data.sesion_id, json.dumps(diagnostico_generado))
         )
-        conn.commit()
-        log.info(f"Diagnóstico para sesion_id: {data.sesion_id} guardado en la BD.")
+        db.commit()
 
         return diagnostico_generado
 
     except HTTPException:
-        if conn: conn.rollback()
+        db.rollback()
         raise
     except Exception as e:
-        if conn: conn.rollback()
-        log.exception("Error crítico en get_or_create_diagnosis")
+        db.rollback()
+        log.exception("Error en get_or_create_diagnosis")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn:
-            _put_conn_back(conn)
 
-
-# --- ENDPOINT: DETALLE PARA GRÁFICOS ---
 @app.post("/get-session-details")
-def get_session_details(data: DetailRequest):
-    conn = None
+def get_session_details(data: DetailRequest, db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
-
-        cur.execute(
-            """
-            SELECT
-                etapa,
-                perclos,
-                parpadeos,
-                velocidad_ocular,
-                num_bostezos,
-                nivel_subjetivo,
-                estado_fatiga
-            FROM mediciones
-            WHERE sesion_id = %s
-            """,
-            (data.sesion_id,),
-        )
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
+        cur.execute("SELECT etapa, perclos, parpadeos, velocidad_ocular, num_bostezos, nivel_subjetivo, estado_fatiga FROM mediciones WHERE sesion_id = %s", (data.sesion_id,))
         filas = cur.fetchall()
-
-        datos = {}
-        for fila in filas:
-            datos[fila["etapa"]] = fila
-
+        datos = {fila["etapa"]: fila for fila in filas} # Nota: 'etapa' no existe en lógica continua, pero se mantiene por compatibilidad
         return datos
     except Exception as e:
-        log.exception("Error detalle")
         return {"error": str(e)}
-    finally:
-        if conn:
-            _put_conn_back(conn)
-
-from fastapi import FastAPI
-from psycopg2 import extras
 
 @app.get("/admin/all-sessions")
-def admin_all_sessions():
-    conn = None
+def admin_all_sessions(db = Depends(get_db)):
     try:
-        conn = _get_conn_from_pool()
-        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
-
+        cur = db.cursor(cursor_factory=extras.RealDictCursor)
         cur.execute("""
             SELECT 
                 s.id AS sesion_id,
@@ -766,14 +641,6 @@ def admin_all_sessions():
             WHERE s.fecha_fin IS NOT NULL
             ORDER BY s.fecha_inicio DESC
         """)
-
-        sesiones = cur.fetchall()
-
-        return {"ok": True, "sesiones": sesiones}
-
+        return {"ok": True, "sesiones": cur.fetchall()}
     except Exception as e:
         return {"ok": False, "error": str(e)}
-    finally:
-        if conn:
-            _put_conn_back(conn)
-

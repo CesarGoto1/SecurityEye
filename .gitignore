@@ -11,3 +11,12 @@ __pycache__/
 .env
 .venv/
 venv/
+
+# Archivos de análisis, datos de prueba y scripts locales
+analisis_estadistico.txt
+cuestionario_sus_preguntas.txt
+datos_prueba_n8n.json
+propuesta_cuestionario_sus.md
+reporte_pruebas_articulo.txt
+stress_test_n8n.py
+stress_test_register.py
