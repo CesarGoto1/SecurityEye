@@ -322,7 +322,7 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
 
         # 2. Llamada a N8N (Síncrona ahora, para correr en el ThreadPool)
         try:
-            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://cesarandresgoto.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
+            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://pepaez.app.n8n.cloud/webhook/visual-fatigue-diagnosis")
             log.info(f"--- INICIO LLAMADA A N8N (SYNC) ---")
             
             if n8n_webhook_url:
