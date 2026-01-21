@@ -17,6 +17,7 @@ const statusOverlay = document.getElementById('statusOverlay');
 const statusText = document.getElementById('statusText');
 const alertBanner = document.getElementById('alertBanner');
 const alertText = document.getElementById('alertText');
+const loaderModal = document.getElementById('loaderModal');
 
 // Metric displays
 const blinkCountEl = document.getElementById('blinkCount');
@@ -433,6 +434,9 @@ function mostrarModalKSS() {
         btn.onclick = async (e) => {
             const kssValue = e.currentTarget.dataset.kss;
             kssModal.hide();
+            
+            // Show loader
+            if (loaderModal) loaderModal.style.display = 'block';
 
             const usuario = JSON.parse(localStorage.getItem('usuario'));
             const activityType = 'pdf';
@@ -468,7 +472,6 @@ function mostrarModalKSS() {
                 es_fatiga: esFatiga
             };
 
-            // Mostrar spinner o mensaje de carga si se desea (opcional)
             console.log("Enviando datos finales y solicitando diagnóstico IA...");
 
             try {
@@ -491,6 +494,9 @@ function mostrarModalKSS() {
             } catch (e) {
                 console.error('Error:', e);
                 alert('No se pudo conectar al servidor para finalizar la sesión.');
+            } finally {
+                // Hide loader
+                if (loaderModal) loaderModal.style.display = 'none';
             }
         };
     });
