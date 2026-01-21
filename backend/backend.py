@@ -320,56 +320,58 @@ def save_fatigue(data: FatigueResult, db = Depends(get_db)):
             nivel_val, estado_txt, data.max_sin_parpadeo, data.alertas, momentos_json, data.kss_final
         ))
 
+        payload_to_n8n = {}
+
         # 2. Llamada a N8N (Síncrona ahora, para correr en el ThreadPool)
         try:
             n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "https://pepaez.app.n8n.cloud/webhook/7d7ea1f6-78b4-45b0-9d39-2c63eef11f2c")
-            log.info(f"--- INICIO LLAMADA A N8N (SYNC) ---")
-            
-                        if n8n_webhook_url:
-                            # Asegurarse de que no se envíen valores nulos a n8n
-                            payload_to_n8n = {
-                                "resumen_sesion": {
-                                    "tiempo_total_seg": data.tiempo_total_seg or 0,
-                                    "perclos": float(data.perclos or 0.0),
-                                    "sebr": data.sebr or 0,
-                                    "blink_rate_min": float(data.blink_rate_min or 0.0),
-                                    "pct_incompletos": float(data.pct_incompletos or 0.0),
-                                    "num_bostezos": data.num_bostezos or 0,
-                                    "velocidad_ocular": float(data.velocidad_ocular or 0.0),
-                                    "alertas_totales": data.alertas or 0,
-                                    "kss_final": data.kss_final or 0
-                                }
-                            }
-                            
-                            # Usamos Client síncrono
-                            with httpx.Client() as client:
-                                response = client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
-                                response.raise_for_status()
-                                responseData = response.json()
-            
-                                diagnostico_ia = None
-                                if isinstance(responseData, list) and responseData:
-                                    if isinstance(responseData[0], dict) and 'json' in responseData[0]:
-                                        diagnostico_ia = responseData[0]['json']
-                                    elif isinstance(responseData[0], dict):
-                                        diagnostico_ia = responseData[0]
-                                
-                                if diagnostico_ia is None:
-                                    diagnostico_ia = responseData
-            
-                            if diagnostico_ia and sesion_id:
-                                cur.execute(
-                                    "INSERT INTO diagnosticos_ia (sesion_id, diagnostico_json) VALUES (%s, %s) ON CONFLICT (sesion_id) DO UPDATE SET diagnostico_json = EXCLUDED.diagnostico_json",
-                                    (sesion_id, json.dumps(diagnostico_ia))
-                                )
-                                log.info("Diagnóstico IA guardado.")
-                        
-                    except httpx.HTTPStatusError as e:
-                        log.error(f"!!! ERROR HTTP LLAMADA N8N: {e}")
-                        log.error(f"--- N8N ERROR RESPONSE BODY: {e.response.text} ---")
-                    except Exception as e:
-                        log.exception(f"!!! ERROR INESPERADO LLAMADA N8N: {e}")
-                        # No fallamos la request principal si N8N falla, solo logueamos
+            log.info("--- INICIO LLAMADA A N8N (SYNC) ---")
+
+            if n8n_webhook_url:
+                # Asegurarse de que no se envíen valores nulos a n8n
+                payload_to_n8n = {
+                    "resumen_sesion": {
+                        "tiempo_total_seg": data.tiempo_total_seg or 0,
+                        "perclos": float(data.perclos or 0.0),
+                        "sebr": data.sebr or 0,
+                        "blink_rate_min": float(data.blink_rate_min or 0.0),
+                        "pct_incompletos": float(data.pct_incompletos or 0.0),
+                        "num_bostezos": data.num_bostezos or 0,
+                        "velocidad_ocular": float(data.velocidad_ocular or 0.0),
+                        "alertas_totales": data.alertas or 0,
+                        "kss_final": data.kss_final or 0,
+                    }
+                }
+
+                # Usamos Client síncrono
+                with httpx.Client() as client:
+                    response = client.post(n8n_webhook_url, json=payload_to_n8n, timeout=60)
+                    response.raise_for_status()
+                    responseData = response.json()
+
+                    diagnostico_ia = None
+                    if isinstance(responseData, list) and responseData:
+                        if isinstance(responseData[0], dict) and 'json' in responseData[0]:
+                            diagnostico_ia = responseData[0]['json']
+                        elif isinstance(responseData[0], dict):
+                            diagnostico_ia = responseData[0]
+
+                    if diagnostico_ia is None:
+                        diagnostico_ia = responseData
+
+                if diagnostico_ia and sesion_id:
+                    cur.execute(
+                        "INSERT INTO diagnosticos_ia (sesion_id, diagnostico_json) VALUES (%s, %s) ON CONFLICT (sesion_id) DO UPDATE SET diagnostico_json = EXCLUDED.diagnostico_json",
+                        (sesion_id, json.dumps(diagnostico_ia))
+                    )
+                    log.info("Diagnóstico IA guardado.")
+
+        except httpx.HTTPStatusError as e:
+            log.error(f"!!! ERROR HTTP LLAMADA N8N: {e}")
+            log.error(f"--- N8N ERROR RESPONSE BODY: {e.response.text} ---")
+        except Exception as e:
+            log.exception(f"!!! ERROR INESPERADO LLAMADA N8N: {e}")
+            # No fallamos la request principal si N8N falla, solo logueamos
         # 3. Cerrar Sesión en BD
         # El usuario ha clarificado que 'resumen' debe guardar los datos de la sesión, no el diagnóstico.
         summary_json = json.dumps(payload_to_n8n.get("resumen_sesion")) if payload_to_n8n.get("resumen_sesion") else None
