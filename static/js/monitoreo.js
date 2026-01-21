@@ -37,9 +37,12 @@ let startTime = 0;
 let lastFrameTime = 0;
 let sesionId = null;
 let lastBlinkTime = 0;
-let currentActivityType = 'pdf'; // Solo PDF
+let currentActivityType = 'pdf'; // pdf | youtube
 let currentResourceUrl = null;
 let currentResourceName = null;
+
+let isYouTubeActivity = false;
+let player; // YouTube Player
 
 // Variables para el flujo de recomendación IA
 let pendingRedirectUrl = null;
@@ -336,7 +339,16 @@ function startCamera(isResuming = false) {
     camera.start().then(() => {
         running = true;
         startBtn.disabled = true;
-        endSessionBtn.disabled = false;
+        
+        // Comportamiento diferente si es video
+        if (isYouTubeActivity) {
+            if (player && typeof player.playVideo === 'function') {
+                player.playVideo();
+            }
+        } else {
+            endSessionBtn.disabled = false;
+        }
+
         if (statusOverlay) statusOverlay.classList.add('d-none');
         
         lastFrameTime = performance.now() / 1000;
@@ -543,10 +555,6 @@ document.getElementById('breakBtn3')?.addEventListener('click', () => abrirModal
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof pdfjsLib !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-    }
-
     const usuario = localStorage.getItem('usuario');
     if (!usuario) {
         window.location.href = '/login.html';
@@ -557,9 +565,17 @@ document.addEventListener('DOMContentLoaded', () => {
     sesionId = params.get('sesion_id');
     currentResourceName = params.get('nombre');
     currentResourceUrl = params.get('url');
+
+    // Determinar si es una actividad de YouTube
+    if (currentResourceUrl && (currentResourceUrl.includes('youtube.com') || currentResourceUrl.includes('youtu.be'))) {
+        isYouTubeActivity = true;
+        currentActivityType = 'youtube';
+    } else {
+        currentActivityType = 'pdf';
+    }
     
-    // Para PDFs locales que no tienen URL directamente en el input
-    if (!currentResourceUrl) {
+    // Para PDFs locales que se pasan por sessionStorage
+    if (currentActivityType === 'pdf' && !currentResourceUrl) {
         currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
         sessionStorage.removeItem('pdfDataUrl'); 
     }
@@ -570,15 +586,91 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    if(sessionInfoEl) sessionInfoEl.textContent = `Lectura - ${currentResourceName}`;
-    
-    // Forzamos carga PDF
-    cargarContenidoPDF(currentResourceUrl, currentResourceName);
+    loadContent();
 });
 
 // ==========================================
-// 8. CARGAR CONTENIDO (SOLO PDF)
+// 8. CARGAR CONTENIDO (PDF o YouTube)
 // ==========================================
+
+function loadContent() {
+    if (isYouTubeActivity) {
+        if(sessionInfoEl) sessionInfoEl.textContent = `Video: ${currentResourceName}`;
+        loadYouTubeVideo(currentResourceUrl);
+    } else {
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        }
+        if(sessionInfoEl) sessionInfoEl.textContent = `Lectura: ${currentResourceName}`;
+        cargarContenidoPDF(currentResourceUrl, currentResourceName);
+    }
+}
+
+function getYouTubeID(url){
+    var ID = '';
+    url = url.replace(/(>|<)/gi,'').split(/(vi\/|v=|\/v\/|youtu\.be\/|\/embed\/)/);
+    if(url[2] !== undefined){
+        ID = url[2].split(/[^0-9a-z_\-]/i);
+        ID = ID[0];
+    }
+    else{
+        ID = url;
+    }
+    return ID;
+}
+
+function loadYouTubeVideo(url) {
+    contentContainer.innerHTML = '<div id="youtube-player" style="width: 100%; height: 100%; min-height: 500px;"></div>';
+
+    const videoId = getYouTubeID(url);
+
+    // Cargar la API de YouTube si no está presente
+    if (!window.YT) {
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+
+    // La API de YouTube llamará a esta función global cuando esté lista
+    window.onYouTubeIframeAPIReady = function() {
+        player = new YT.Player('youtube-player', {
+            height: '100%',
+            width: '100%',
+            videoId: videoId,
+            playerVars: {
+                'playsinline': 1,
+                'autoplay': 0, // La reproducción se inicia con el monitoreo
+                'controls': 1,
+                'rel': 0
+            },
+            events: {
+                'onReady': onPlayerReady,
+                'onStateChange': onPlayerStateChange
+            }
+        });
+    }
+    
+    // Si la API ya se había cargado en una navegación anterior, llamarla directamente
+    if (window.YT && window.YT.Player) {
+        window.onYouTubeIframeAPIReady();
+    }
+}
+
+function onPlayerReady(event) {
+    console.log("YouTube Player listo.");
+    // El video se reproducirá cuando el usuario presione "Iniciar"
+}
+
+function onPlayerStateChange(event) {
+    // Cuando el video termine (ENDED)
+    if (event.data == YT.PlayerState.ENDED) {
+        console.log("Video finalizado, habilitando botón 'Finalizar'.");
+        endSessionBtn.disabled = false;
+        // Opcional: mostrar una alerta al usuario.
+        // alert('Video finalizado. Ahora puedes terminar la sesión.');
+    }
+}
 
 async function cargarContenidoPDF(url, nombre) {
     console.log('Cargando PDF en modo scroll:', { url, nombre });
@@ -605,11 +697,9 @@ async function cargarContenidoPDF(url, nombre) {
             const loadingTask = pdfjsLib.getDocument(url);
             const pdfDoc = await loadingTask.promise;
             
-            // Ocultar spinner y mostrar contenedor de páginas
             if (loadingIndicator) loadingIndicator.style.display = 'none';
             pagesContainer.style.visibility = 'visible';
 
-            // 2. Renderizar todas las páginas secuencialmente
             for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                 const page = await pdfDoc.getPage(pageNum);
                 
@@ -631,7 +721,6 @@ async function cargarContenidoPDF(url, nombre) {
                     viewport: viewport
                 };
                 
-                // Renderizar y esperar a que termine antes de pasar a la siguiente
                 await page.render(renderContext).promise;
             }
 

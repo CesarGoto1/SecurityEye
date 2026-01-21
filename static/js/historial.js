@@ -246,7 +246,7 @@ async function abrirDetalles(sesionId) {
                 </div>
                 <div class="col-6">
                     <strong class="text-muted d-block small">Parpadeos</strong>
-                    <span>${sesion.sebr || 0}</span>
+                    <span>${sesion.parpadeos || 0}</span>
                 </div>
             </div>
 
