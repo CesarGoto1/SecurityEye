@@ -29,12 +29,6 @@ const alertsCountEl = document.getElementById('alertsCount');
 const contentContainer = document.getElementById('contentContainer');
 const sessionInfoEl = document.getElementById('sessionInfo');
 
-// PDF.js state
-let pdfDoc = null,
-    pageNum = 1,
-    pageRendering = false,
-    pageNumPending = null;
-
 // Estado global y variables
 let appState = 'IDLE';
 let running = false;
@@ -586,82 +580,65 @@ document.addEventListener('DOMContentLoaded', () => {
 // 8. CARGAR CONTENIDO (SOLO PDF)
 // ==========================================
 
-function renderPage(num) {
-    pageRendering = true;
-    const canvas = document.getElementById('pdf-canvas');
-    const ctx = canvas.getContext('2d');
-    const pageNumEl = document.getElementById('page-num');
-    const container = canvas.parentElement;
-
-    pdfDoc.getPage(num).then(page => {
-        const desiredWidth = container.clientWidth;
-        const viewportAtScale1 = page.getViewport({ scale: 1 });
-        const scale = desiredWidth / viewportAtScale1.width;
-        const viewport = page.getViewport({ scale: scale });
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        const renderContext = { canvasContext: ctx, viewport: viewport };
-        const renderTask = page.render(renderContext);
-
-        renderTask.promise.then(() => {
-            pageRendering = false;
-            if (pageNumPending !== null) {
-                renderPage(pageNumPending);
-                pageNumPending = null;
-            }
-        });
-    });
-
-    pageNumEl.textContent = num;
-}
-
-function queueRenderPage(num) {
-    if (pageRendering) {
-        pageNumPending = num;
-    } else {
-        renderPage(num);
-    }
-}
-
-function onPrevPage() {
-    if (pageNum <= 1) return;
-    pageNum--;
-    queueRenderPage(pageNum);
-}
-
-function onNextPage() {
-    if (pageNum >= pdfDoc.numPages) return;
-    pageNum++;
-    queueRenderPage(pageNum);
-}
-
-function cargarContenidoPDF(url, nombre) {
-    console.log('Cargando PDF:', { url, nombre });
+async function cargarContenidoPDF(url, nombre) {
+    console.log('Cargando PDF en modo scroll:', { url, nombre });
     contentContainer.innerHTML = '';
     const hasUrl = url && url.trim() !== '';
 
     if (hasUrl) {
+        // 1. Mostrar un spinner de carga y crear contenedor
         contentContainer.innerHTML = `
-            <div id="pdf-viewer" style="width: 100%; height: 100%; display: flex; flex-direction: column;">
-                <div id="pdf-controls" class="d-flex justify-content-center align-items-center p-2 bg-dark text-white gap-3">
-                    <button id="prev-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left"></i></button>
-                    <span>Página: <span id="page-num">0</span> / <span id="page-count">0</span></span>
-                    <button id="next-page" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-right"></i></button>
+            <div id="pdf-viewer-scroll" style="width: 100%; height: 100%; overflow-y: auto; text-align: center;">
+                <div class="text-center my-5">
+                    <div class="spinner-border text-light" role="status">
+                        <span class="visually-hidden">Cargando PDF...</span>
+                    </div>
+                    <p class="text-white-50 mt-2">Cargando documento...</p>
                 </div>
-                <div style="flex-grow: 1; overflow: auto; text-align: center;"><canvas id="pdf-canvas"></canvas></div>
+                <div id="pdf-pages-container" class="d-flex flex-column align-items-center py-3" style="visibility: hidden;"></div>
             </div>`;
-        document.getElementById('prev-page').addEventListener('click', onPrevPage);
-        document.getElementById('next-page').addEventListener('click', onNextPage);
-        pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
-            pdfDoc = pdfDoc_;
-            document.getElementById('page-count').textContent = pdfDoc.numPages;
-            pageNum = 1;
-            renderPage(pageNum);
-        }).catch(err => {
+        
+        const pagesContainer = document.getElementById('pdf-pages-container');
+        const loadingIndicator = contentContainer.querySelector('.text-center.my-5');
+
+        try {
+            const loadingTask = pdfjsLib.getDocument(url);
+            const pdfDoc = await loadingTask.promise;
+            
+            // Ocultar spinner y mostrar contenedor de páginas
+            if (loadingIndicator) loadingIndicator.style.display = 'none';
+            pagesContainer.style.visibility = 'visible';
+
+            // 2. Renderizar todas las páginas secuencialmente
+            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                const page = await pdfDoc.getPage(pageNum);
+                
+                const canvas = document.createElement('canvas');
+                canvas.className = 'pdf-page-canvas mb-3 shadow-sm';
+                pagesContainer.appendChild(canvas);
+                
+                const desiredWidth = pagesContainer.clientWidth * 0.98;
+                const viewportAtScale1 = page.getViewport({ scale: 1 });
+                const scale = desiredWidth / viewportAtScale1.width;
+                const viewport = page.getViewport({ scale: scale });
+                
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                const ctx = canvas.getContext('2d');
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                
+                // Renderizar y esperar a que termine antes de pasar a la siguiente
+                await page.render(renderContext).promise;
+            }
+
+        } catch (err) {
             console.error('Error al cargar el PDF:', err);
             contentContainer.innerHTML = `<div class="text-center text-danger p-4"><i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i><p class="mb-0">Error al cargar el PDF.</p><small class="text-muted">${err.message}</small></div>`;
-        });
+        }
     } else {
         contentContainer.innerHTML = `<div class="text-center text-white p-4"><i class="bi bi-file-earmark-pdf fs-1 d-block mb-2"></i><p class="mb-0">${nombre}</p><small class="text-muted">Sin archivo proporcionado</small></div>`;
     }
