@@ -9,7 +9,6 @@ function cerrarSesion() {
 
 // ========================================================
 // FUNCIÓN GLOBAL PARA PROTEGER RUTAS
-// protegerRuta("admin")  → solo admin
 // protegerRuta("usuario") → solo estudiante
 // ========================================================
 function protegerRuta(rolRequerido) {
@@ -22,19 +21,8 @@ function protegerRuta(rolRequerido) {
 
     const usuario = JSON.parse(usuarioStr);
 
-    // Protección para admin
-    if (rolRequerido === "admin" && usuario.rol !== "admin") {
-        alert("Acceso denegado. Solo administradores pueden acceder.");
-        window.location.href = "/usuario/index.html";
-        return;
-    }
-
-    // Protección para usuario (bloquear admin)
-    if (rolRequerido === "usuario" && usuario.rol === "admin") {
-        alert("Los administradores no pueden acceder a esta sección.");
-        window.location.href = "/admin/index.html";
-        return;
-    }
+    // This function can be simplified further if there are no roles anymore
+    // but for now, we keep the structure.
 }
 
 // ========================================================

@@ -52,16 +52,7 @@ def serve_usuario_pages(page: str):
         return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="Page not found")
 
-@app.get("/admin/{page:path}", include_in_schema=False)
-def serve_admin_pages(page: str):
-    file_path = f"templates/admin/{page}"
-    if not os.path.exists(file_path) or os.path.isdir(file_path):
-        index_path = os.path.join(file_path, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-    elif os.path.exists(file_path):
-        return FileResponse(file_path)
-    raise HTTPException(status_code=404, detail="Page not found")
+
 
 
 # --- MODELOS DE DATOS ---
@@ -224,7 +215,7 @@ def login_user(data: Login, db = Depends(get_db)):
         cur.execute("UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = %s", (user["id"],))
         db.commit()
 
-        rol_normalizado = "admin" if user["rol_nombre"] == "Administrador" else "usuario"
+        rol_normalizado = "usuario"
 
         return {
             "mensaje": "Login exitoso",
@@ -645,29 +636,3 @@ def get_session_details(data: DetailRequest, db = Depends(get_db)):
         return datos
     except Exception as e:
         return {"error": str(e)}
-
-@app.get("/admin/all-sessions")
-def admin_all_sessions(db = Depends(get_db)):
-    try:
-        cur = db.cursor(cursor_factory=extras.RealDictCursor)
-        cur.execute("""
-            SELECT 
-                s.id AS sesion_id,
-                CONCAT(u.nombre, ' ', u.apellido) AS estudiante,
-                TO_CHAR(s.fecha_inicio, 'DD/MM/YYYY HH24:MI') AS fecha,
-                s.tipo_actividad,
-                s.total_segundos,
-                s.alertas,
-                s.es_fatiga,
-                m.perclos,
-                m.velocidad_ocular,
-                m.num_bostezos
-            FROM sesiones s
-            JOIN usuarios u ON u.id = s.usuario_id
-            LEFT JOIN mediciones m ON m.sesion_id = s.id
-            WHERE s.fecha_fin IS NOT NULL
-            ORDER BY s.fecha_inicio DESC
-        """)
-        return {"ok": True, "sesiones": cur.fetchall()}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}

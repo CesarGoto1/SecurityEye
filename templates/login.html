@@ -120,11 +120,7 @@
       msg.className = "success";
 
       setTimeout(() => {
-        if(data.usuario.rol === "admin"){
-          location.href = "admin/index.html";
-        } else {
-          location.href = "usuario/index.html";
-        }
+        location.href = "usuario/index.html";
       }, 700);
 
     }catch(e){
