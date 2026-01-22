@@ -376,7 +376,7 @@ function startMonitoringSession() {
     earValues = [];
 
     startBtn.disabled = true;
-    endSessionBtn.disabled = false; // Se habilita finalizar desde que se inicia la sesión
+    endSessionBtn.disabled = true; // CAMBIO: Deshabilitado hasta que el video termine
 
     if (statusOverlay) statusOverlay.classList.remove('d-none');
     lastFrameTime = performance.now() / 1000;
@@ -687,8 +687,8 @@ function onPlayerStateChange(event) {
     
     // Cuando el video termine (ENDED)
     if (event.data == YT.PlayerState.ENDED) {
-        console.log("Video finalizado, sesión puede ser finalizada por el usuario.");
-        // endSessionBtn ya debería estar habilitado desde que se inicia la sesión.
+        console.log("Video finalizado, habilitando botón 'Finalizar'.");
+        endSessionBtn.disabled = false; // CAMBIO: Habilitar botón 'Finalizar'
         // Opcional: alertar al usuario.
         // alert('Video finalizado. Ahora puedes terminar la sesión.');
     }
