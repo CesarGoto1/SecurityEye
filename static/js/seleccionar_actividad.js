@@ -11,46 +11,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
-    let tipo, nombre, url, file, fuente;
 
-    if (youtubeUrl) {
-      // --- LÓGICA PARA YOUTUBE ---
-      if (!youtubeUrl.includes('youtube.com') && !youtubeUrl.includes('youtu.be')) {
-        alert('Por favor, introduce una URL de YouTube válida.');
+    if (!youtubeUrl) {
+        alert('Por favor, introduce una URL de YouTube.');
         return;
-      }
-      tipo = 'youtube';
-      nombre = 'Video de YouTube';
-      url = youtubeUrl;
-      fuente = nombre;
-      file = null; // No hay archivo para YouTube
-    } else {
-      // --- LÓGICA EXISTENTE PARA PDF ---
-      tipo = 'pdf';
-      nombre = document.getElementById('pdfNombre').value.trim();
-      url = document.getElementById('pdfUrl').value.trim();
-      file = document.getElementById('pdfFile').files[0];
-      fuente = nombre;
-
-      if (!nombre) {
-        alert('Por favor ingresa un nombre para el documento.');
-        return;
-      }
-      if (!url && !file) {
-        alert('Por favor selecciona un archivo PDF o ingresa una URL.');
-        return;
-      }
     }
 
+    if (!youtubeUrl.includes('youtube.com') && !youtubeUrl.includes('youtu.be')) {
+      alert('Por favor, introduce una URL de YouTube válida.');
+      return;
+    }
+    
+    const tipo = 'youtube';
+    const nombre = 'Video de YouTube';
+
     try {
-      // --- LÓGICA COMÚN (Crear sesión y redirigir) ---
       const resp = await fetch(`${API_BASE}/create-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           usuario_id: usuarioId, 
           tipo_actividad: tipo, 
-          fuente: fuente 
+          fuente: nombre 
         })
       });
 
@@ -62,33 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await resp.json();
       const sesionId = data.sesion_id;
 
-      let resourceUrl = url;
-      if (file) { // La gestión de archivos solo se aplica a PDF
-        try {
-          const fileDataUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = e => resolve(e.target.result);
-            reader.onerror = e => reject(new Error('No se pudo leer el archivo.'));
-            reader.readAsDataURL(file);
-          });
-          sessionStorage.setItem('pdfDataUrl', fileDataUrl);
-          resourceUrl = ''; 
-        } catch (fileError) {
-          console.error(fileError);
-          alert(fileError.message);
-          return;
-        }
-      }
-
       const params = new URLSearchParams({
         sesion_id: sesionId,
         tipo: tipo,
         nombre: nombre,
+        url: youtubeUrl
       });
-
-      if (resourceUrl) {
-        params.append('url', resourceUrl);
-      }
 
       window.location.href = `monitoreo.html?${params.toString()}`;
 

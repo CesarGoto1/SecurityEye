@@ -441,7 +441,7 @@ function mostrarModalKSS() {
             if (loaderModal) loaderModal.style.display = 'block';
 
             const usuario = JSON.parse(localStorage.getItem('usuario'));
-            const activityType = 'pdf'; 
+            const activityType = 'youtube'; // Changed to 'youtube'
             
             // Cálculos finales totales
             const tiempoTotal = Math.round((performance.now() / 1000) - startTime - (CALIBRATION_DURATION));
@@ -574,22 +574,12 @@ document.addEventListener('DOMContentLoaded', () => {
     currentResourceName = params.get('nombre');
     currentResourceUrl = params.get('url');
 
-    // Determinar si es una actividad de YouTube
-    if (currentResourceUrl && (currentResourceUrl.includes('youtube.com') || currentResourceUrl.includes('youtu.be'))) {
-        isYouTubeActivity = true;
-        currentActivityType = 'youtube';
-    } else {
-        currentActivityType = 'pdf';
-    }
+    // Simplified logic: Always assume YouTube
+    isYouTubeActivity = true;
+    currentActivityType = 'youtube';
     
-    // Para PDFs locales que se pasan por sessionStorage
-    if (currentActivityType === 'pdf' && !currentResourceUrl) {
-        currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
-        sessionStorage.removeItem('pdfDataUrl'); 
-    }
-
-    if (!sesionId || !currentResourceName) {
-        alert('Sesión no válida. Redirigiendo...');
+    if (!sesionId || !currentResourceName || !currentResourceUrl) {
+        alert('Sesión no válida o URL de video no encontrada. Redirigiendo...');
         window.location.href = 'seleccionar_actividad.html';
         return;
     }
@@ -602,16 +592,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 
 function loadContent() {
-    if (isYouTubeActivity) {
-        if(sessionInfoEl) sessionInfoEl.textContent = `Video: ${currentResourceName}`;
-        loadYouTubeVideo(currentResourceUrl);
-    } else {
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-        }
-        if(sessionInfoEl) sessionInfoEl.textContent = `Lectura: ${currentResourceName}`;
-        cargarContenidoPDF(currentResourceUrl, currentResourceName);
-    }
+    // Simplified: Always load YouTube
+    if(sessionInfoEl) sessionInfoEl.textContent = `Video: ${currentResourceName}`;
+    loadYouTubeVideo(currentResourceUrl);
 }
 
 function getYouTubeID(url){
@@ -680,66 +663,7 @@ function onPlayerStateChange(event) {
     }
 }
 
-async function cargarContenidoPDF(url, nombre) {
-    console.log('Cargando PDF en modo scroll:', { url, nombre });
-    contentContainer.innerHTML = '';
-    const hasUrl = url && url.trim() !== '';
 
-    if (hasUrl) {
-        // 1. Mostrar un spinner de carga y crear contenedor
-        contentContainer.innerHTML = `
-            <div id="pdf-viewer-scroll" style="width: 100%; height: 100%; overflow-y: auto; text-align: center;">
-                <div class="text-center my-5">
-                    <div class="spinner-border text-light" role="status">
-                        <span class="visually-hidden">Cargando PDF...</span>
-                    </div>
-                    <p class="text-white-50 mt-2">Cargando documento...</p>
-                </div>
-                <div id="pdf-pages-container" class="d-flex flex-column align-items-center py-3" style="visibility: hidden;"></div>
-            </div>`;
-        
-        const pagesContainer = document.getElementById('pdf-pages-container');
-        const loadingIndicator = contentContainer.querySelector('.text-center.my-5');
-
-        try {
-            const loadingTask = pdfjsLib.getDocument(url);
-            const pdfDoc = await loadingTask.promise;
-            
-            if (loadingIndicator) loadingIndicator.style.display = 'none';
-            pagesContainer.style.visibility = 'visible';
-
-            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-                const page = await pdfDoc.getPage(pageNum);
-                
-                const canvas = document.createElement('canvas');
-                canvas.className = 'pdf-page-canvas mb-3 shadow-sm';
-                pagesContainer.appendChild(canvas);
-                
-                const desiredWidth = pagesContainer.clientWidth * 0.98;
-                const viewportAtScale1 = page.getViewport({ scale: 1 });
-                const scale = desiredWidth / viewportAtScale1.width;
-                const viewport = page.getViewport({ scale: scale });
-                
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-                
-                const ctx = canvas.getContext('2d');
-                const renderContext = {
-                    canvasContext: ctx,
-                    viewport: viewport
-                };
-                
-                await page.render(renderContext).promise;
-            }
-
-        } catch (err) {
-            console.error('Error al cargar el PDF:', err);
-            contentContainer.innerHTML = `<div class="text-center text-danger p-4"><i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i><p class="mb-0">Error al cargar el PDF.</p><small class="text-muted">${err.message}</small></div>`;
-        }
-    } else {
-        contentContainer.innerHTML = `<div class="text-center text-white p-4"><i class="bi bi-file-earmark-pdf fs-1 d-block mb-2"></i><p class="mb-0">${nombre}</p><small class="text-muted">Sin archivo proporcionado</small></div>`;
-    }
-}
 
 // ==========================================
 // 9. MANEJO DEL MODAL DE RECOMENDACIÓN
