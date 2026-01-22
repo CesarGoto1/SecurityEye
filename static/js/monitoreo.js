@@ -326,58 +326,73 @@ faceMesh.onResults((results) => {
 // 4. CONTROL DE CÁMARA
 // ==========================================
 
-function startCamera(isResuming = false) {
-    if (!camera) {
-        camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await faceMesh.send({ image: videoElement });
-            },
-            width: 640,
-            height: 480
-        });
-    }
+function initCamera() {
+    if (camera) return; // Ya inicializada
 
-    camera.start().then(() => {
-        running = true;
-        startBtn.disabled = true;
-        
-        // Comportamiento diferente si es video
-        if (isYouTubeActivity) {
-            if (player && typeof player.playVideo === 'function') {
-                player.playVideo();
-            }
-        } else {
-            endSessionBtn.disabled = false;
-        }
-
-        if (statusOverlay) statusOverlay.classList.add('d-none');
-        
-        lastFrameTime = performance.now() / 1000;
-        
-        if (isResuming) {
-            console.log("Reanudando sesión de monitoreo...");
-            appState = 'MONITORING';
-        } else {
-            appState = 'CALIBRATING';
-            startTime = performance.now() / 1000;
-            lastBlinkTime = startTime;
-            calibrationEARs = [];
-            calibrationMARs = [];
-            crearSesion();
-            blinkCounter = 0;
-            incompleteBlinks = 0;
-            accumulatedClosureTime = 0;
-            measureFramesTotal = 0;
-            measureFramesClosed = 0;
-            yawnCounter = 0;
-            totalIrisDistance = 0;
-            frameCount = 0;
-            alertasCount = 0;
-            momentosFatiga = [];
-            maxSinParpadeo = 0;
-            earValues = [];
-        }
+    camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await faceMesh.send({ image: videoElement });
+        },
+        width: 640,
+        height: 480
     });
+    
+    camera.start().then(() => {
+        console.log("Cámara iniciada automáticamente.");
+        running = true; // Permite que onResults se ejecute, pero appState es IDLE
+        statusText.textContent = "Cámara lista. Esperando inicio...";
+    }).catch(err => {
+        console.error("Error al iniciar la cámara:", err);
+        statusText.textContent = "Error de cámara. Revisa los permisos.";
+        alert("No se pudo acceder a la cámara. Por favor, revisa los permisos del navegador y recarga la página.");
+    });
+}
+
+function startMonitoringSession() {
+    if (!camera) {
+        alert("La cámara no está lista. Por favor, permite el acceso a la cámara.");
+        return;
+    }
+    
+    // Iniciar la calibración. El estado cambiará a 'MONITORING'
+    // cuando el video comience a reproducirse.
+    appState = 'CALIBRATING';
+    startTime = performance.now() / 1000;
+    lastBlinkTime = startTime;
+    calibrationEARs = [];
+    calibrationMARs = [];
+    crearSesion(); // Asegura que la sesión exista en los logs
+    blinkCounter = 0;
+    incompleteBlinks = 0;
+    accumulatedClosureTime = 0;
+    measureFramesTotal = 0;
+    measureFramesClosed = 0;
+    yawnCounter = 0;
+    totalIrisDistance = 0;
+    frameCount = 0;
+    alertasCount = 0;
+    momentosFatiga = [];
+    maxSinParpadeo = 0;
+    earValues = [];
+
+    startBtn.disabled = true;
+    endSessionBtn.disabled = false; // Se habilita finalizar desde que se inicia la sesión
+
+    if (statusOverlay) statusOverlay.classList.remove('d-none');
+    lastFrameTime = performance.now() / 1000;
+
+    // Iniciar la reproducción del video para que comience el monitoreo
+    if (player && typeof player.playVideo === 'function') {
+        player.playVideo();
+    } else {
+        // Si el player no está listo, el monitoreo no comenzará.
+        // onPlayerReady se encarga de habilitar el botón 'start'
+        console.warn("Se intentó iniciar la sesión pero el reproductor de video no estaba listo.");
+        alert("El reproductor de video no está listo. Intenta de nuevo en unos segundos.");
+        appState = 'IDLE'; // Revertir estado
+        startBtn.disabled = false;
+        endSessionBtn.disabled = true;
+    }
 }
 
 function pauseMonitoring() {
@@ -551,7 +566,10 @@ async function abrirModalDescanso() {
     }
 }
 
-if (startBtn) startBtn.addEventListener('click', startCamera);
+if (startBtn) {
+    startBtn.disabled = true; // Deshabilitado hasta que el player esté listo
+    startBtn.addEventListener('click', startMonitoringSession);
+}
 if (endSessionBtn) endSessionBtn.addEventListener('click', finalizarSesion);
 
 document.getElementById('breakBtn1')?.addEventListener('click', () => abrirModalDescanso());
@@ -585,6 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadContent();
+    initCamera(); // Iniciar cámara automáticamente
 });
 
 // ==========================================
@@ -650,15 +669,27 @@ function loadYouTubeVideo(url) {
 
 function onPlayerReady(event) {
     console.log("YouTube Player listo.");
-    // El video se reproducirá cuando el usuario presione "Iniciar"
+    // Habilitar el botón de iniciar ahora que el video está listo.
+    if (startBtn) {
+        startBtn.disabled = false;
+    }
 }
 
 function onPlayerStateChange(event) {
+    // Si el video comienza a reproducirse y estamos en calibración,
+    // cambiamos a modo monitoreo.
+    if (event.data == YT.PlayerState.PLAYING && appState === 'CALIBRATING') {
+        console.log("Video reproduciéndose, iniciando monitoreo de métricas.");
+        appState = 'MONITORING';
+        startTime = performance.now() / 1000; // Reiniciar el timer aquí
+        lastBlinkTime = startTime;
+    }
+    
     // Cuando el video termine (ENDED)
     if (event.data == YT.PlayerState.ENDED) {
-        console.log("Video finalizado, habilitando botón 'Finalizar'.");
-        endSessionBtn.disabled = false;
-        // Opcional: mostrar una alerta al usuario.
+        console.log("Video finalizado, sesión puede ser finalizada por el usuario.");
+        // endSessionBtn ya debería estar habilitado desde que se inicia la sesión.
+        // Opcional: alertar al usuario.
         // alert('Video finalizado. Ahora puedes terminar la sesión.');
     }
 }
