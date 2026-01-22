@@ -3,40 +3,54 @@ const API_BASE = '';
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('btnIniciar');
 
-  // Iniciar sesión solo para PDF
   btn.addEventListener('click', async () => {
-    const tipo = 'pdf'; // Forzado a PDF
     const usuarioId = JSON.parse(localStorage.getItem('usuario'))?.id;
-    
     if (!usuarioId) {
       alert('No se encontró usuario en sesión.');
       return;
     }
 
-    // Obtener datos del formulario PDF
-    const nombre = document.getElementById('pdfNombre').value.trim();
-    const url = document.getElementById('pdfUrl').value.trim();
-    const file = document.getElementById('pdfFile').files[0];
+    const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
+    let tipo, nombre, url, file, fuente;
 
-    if (!nombre) {
-      alert('Por favor ingresa un nombre para el documento.');
-      return;
-    }
-    
-    if (!url && !file) {
-      alert('Por favor selecciona un archivo o ingresa una URL.');
-      return;
+    if (youtubeUrl) {
+      // --- LÓGICA PARA YOUTUBE ---
+      if (!youtubeUrl.includes('youtube.com') && !youtubeUrl.includes('youtu.be')) {
+        alert('Por favor, introduce una URL de YouTube válida.');
+        return;
+      }
+      tipo = 'youtube';
+      nombre = 'Video de YouTube';
+      url = youtubeUrl;
+      fuente = nombre;
+      file = null; // No hay archivo para YouTube
+    } else {
+      // --- LÓGICA EXISTENTE PARA PDF ---
+      tipo = 'pdf';
+      nombre = document.getElementById('pdfNombre').value.trim();
+      url = document.getElementById('pdfUrl').value.trim();
+      file = document.getElementById('pdfFile').files[0];
+      fuente = nombre;
+
+      if (!nombre) {
+        alert('Por favor ingresa un nombre para el documento.');
+        return;
+      }
+      if (!url && !file) {
+        alert('Por favor selecciona un archivo PDF o ingresa una URL.');
+        return;
+      }
     }
 
     try {
-      // Crear sesión en backend
+      // --- LÓGICA COMÚN (Crear sesión y redirigir) ---
       const resp = await fetch(`${API_BASE}/create-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           usuario_id: usuarioId, 
           tipo_actividad: tipo, 
-          fuente: nombre 
+          fuente: fuente 
         })
       });
 
@@ -48,10 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await resp.json();
       const sesionId = data.sesion_id;
 
-      // Gestionar recurso (Archivo o URL)
       let resourceUrl = url;
-      if (file && !url) {
-        // Leer PDF como DataURL y guardar en sessionStorage
+      if (file) { // La gestión de archivos solo se aplica a PDF
         try {
           const fileDataUrl = await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -60,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
             reader.readAsDataURL(file);
           });
           sessionStorage.setItem('pdfDataUrl', fileDataUrl);
-          resourceUrl = ''; // URL vacía para que lea del storage en la siguiente pág
+          resourceUrl = ''; 
         } catch (fileError) {
           console.error(fileError);
           alert(fileError.message);
@@ -68,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // Redirigir a monitoreo con parámetros
       const params = new URLSearchParams({
         sesion_id: sesionId,
         tipo: tipo,

@@ -326,7 +326,7 @@ faceMesh.onResults((results) => {
 // 4. CONTROL DE CÁMARA
 // ==========================================
 
-async function startCamera(isResuming = false) { // Made async
+function startCamera(isResuming = false) {
     if (!camera) {
         camera = new Camera(videoElement, {
             onFrame: async () => {
@@ -335,16 +335,6 @@ async function startCamera(isResuming = false) { // Made async
             width: 640,
             height: 480
         });
-    }
-
-    // New logic to create session if it doesn't exist
-    if (!isResuming && !sesionId) {
-        statusText.textContent = "Creando sesión...";
-        const success = await crearNuevaSesionBackend(currentActivityType, currentResourceUrl, currentResourceName);
-        if (!success) {
-            completeStopMonitoring(); // If session creation fails, stop monitoring setup
-            return;
-        }
     }
 
     camera.start().then(() => {
@@ -373,7 +363,7 @@ async function startCamera(isResuming = false) { // Made async
             lastBlinkTime = startTime;
             calibrationEARs = [];
             calibrationMARs = [];
-            // crearSesion(); // Removed, as session is now created above if needed
+            crearSesion();
             blinkCounter = 0;
             incompleteBlinks = 0;
             accumulatedClosureTime = 0;
@@ -384,7 +374,8 @@ async function startCamera(isResuming = false) { // Made async
             frameCount = 0;
             alertasCount = 0;
             momentosFatiga = [];
-            // Se eliminó metricsLastSent
+            maxSinParpadeo = 0;
+            earValues = [];
         }
     });
 }
@@ -429,45 +420,7 @@ async function crearSesion() {
 
 // Se eliminó guardarMetricasContinuas
 
-async function crearNuevaSesionBackend(activityType, resourceUrl, resourceName) {
-    try {
-        const usuario = JSON.parse(localStorage.getItem('usuario'));
-        if (!usuario || !usuario.id) {
-            console.error("Usuario no autenticado para crear sesión.");
-            alert("Error: Inicia sesión para comenzar el monitoreo.");
-            window.location.href = '/login.html';
-            return false; // Indicate failure
-        }
 
-        const response = await fetch(`${API_BASE}/create-session`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                usuario_id: usuario.id,
-                tipo_actividad: activityType,
-                fuente: resourceUrl
-            })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            sesionId = data.sesion_id; // Store the newly created session ID
-            console.log("Nueva sesión creada:", sesionId);
-            return true; // Indicate success
-        } else {
-            const errorText = await response.text();
-            console.error("Error al crear la sesión:", errorText);
-            alert("Error al crear una nueva sesión de monitoreo: " + errorText);
-            completeStopMonitoring();
-            return false; // Indicate failure
-        }
-    } catch (e) {
-        console.error("Error de conexión al crear sesión:", e);
-        alert("Error de red al intentar crear la sesión. Por favor, inténtalo de nuevo.");
-        completeStopMonitoring();
-        return false; // Indicate failure
-    }
-}
 
 async function finalizarSesion() {
     completeStopMonitoring();
@@ -488,7 +441,7 @@ function mostrarModalKSS() {
             if (loaderModal) loaderModal.style.display = 'block';
 
             const usuario = JSON.parse(localStorage.getItem('usuario'));
-            const activityType = currentActivityType; 
+            const activityType = 'pdf'; 
             
             // Cálculos finales totales
             const tiempoTotal = Math.round((performance.now() / 1000) - startTime - (CALIBRATION_DURATION));
@@ -610,7 +563,7 @@ document.getElementById('breakBtn3')?.addEventListener('click', () => abrirModal
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    const usuario = localStorage.parse(localStorage.getItem('usuario'));
+    const usuario = localStorage.getItem('usuario');
     if (!usuario) {
         window.location.href = '/login.html';
         return;
@@ -621,95 +574,33 @@ document.addEventListener('DOMContentLoaded', () => {
     currentResourceName = params.get('nombre');
     currentResourceUrl = params.get('url');
 
-    const youtubeInputContainer = document.getElementById('youtubeInputContainer');
-    const youtubeVideoPlayer = document.getElementById('youtubeVideoPlayer');
-    const youtubeUrlInput = document.getElementById('youtubeUrlInput');
-    const loadYoutubeVideoBtn = document.getElementById('loadYoutubeVideoBtn');
-
+    // Determinar si es una actividad de YouTube
     if (currentResourceUrl && (currentResourceUrl.includes('youtube.com') || currentResourceUrl.includes('youtu.be'))) {
         isYouTubeActivity = true;
         currentActivityType = 'youtube';
-        if (youtubeInputContainer) youtubeInputContainer.style.display = 'none'; // Hide input form
-        if (youtubeVideoPlayer) youtubeVideoPlayer.style.display = 'block'; // Show player container
-        loadYouTubeVideo(currentResourceUrl); // Load video from URL param
-        if(sessionInfoEl) sessionInfoEl.textContent = `Video: ${currentResourceName}`;
-    } else if (currentResourceUrl) { // This means it's a PDF or other activity from URL params
-        currentActivityType = 'pdf'; // Default or determined by other means
-        if (youtubeInputContainer) youtubeInputContainer.style.display = 'none'; // Hide input form
-        if (youtubeVideoPlayer) youtubeVideoPlayer.style.display = 'none'; // Ensure player is hidden
-        // Call loadContent for PDF (which uses cargarContenidoPDF)
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-        }
-        if(sessionInfoEl) sessionInfoEl.textContent = `Lectura: ${currentResourceName}`;
-        cargarContenidoPDF(currentResourceUrl, currentResourceName);
     } else {
-        // No specific activity from URL, user needs to input YouTube URL
-        isYouTubeActivity = true; // Assume YouTube input as primary activity here
-        currentActivityType = 'youtube'; // Set as youtube for session creation
-        if (youtubeInputContainer) youtubeInputContainer.style.display = 'block'; // Show input form
-        if (youtubeVideoPlayer) youtubeVideoPlayer.style.display = 'none'; // Hide player container
-        if(sessionInfoEl) sessionInfoEl.textContent = `Introduce URL de YouTube`;
+        currentActivityType = 'pdf';
     }
-
-    if (loadYoutubeVideoBtn) {
-        loadYoutubeVideoBtn.addEventListener('click', () => {
-            const url = youtubeUrlInput.value;
-            if (!url || (!url.includes('youtube.com') && !url.includes('youtu.be'))) {
-                alert('Por favor, introduce una URL de YouTube válida.');
-                return;
-            }
-            currentResourceUrl = url;
-            currentResourceName = 'Video de YouTube (Usuario)'; // Update name
-            if (youtubeInputContainer) youtubeInputContainer.style.display = 'none';
-            if (youtubeVideoPlayer) youtubeVideoPlayer.style.display = 'block';
-            loadYouTubeVideo(currentResourceUrl);
-            if(sessionInfoEl) sessionInfoEl.textContent = `Video: ${currentResourceName}`;
-            endSessionBtn.disabled = true; // Disable until video ends, will be enabled by onPlayerStateChange
-        });
-    }
-
-    // Para PDFs locales que se pasan por sessionStorage (legacy, if still needed)
-    // This part should only execute if `currentResourceUrl` was NOT set by URL params
-    // and is not being set by user input. Given the new structure, this might be redundant
-    // or need careful placement if PDFs can still be loaded without URL params.
-    // For now, let's keep it here but understand its implication.
+    
+    // Para PDFs locales que se pasan por sessionStorage
     if (currentActivityType === 'pdf' && !currentResourceUrl) {
         currentResourceUrl = sessionStorage.getItem('pdfDataUrl');
-        sessionStorage.removeItem('pdfDataUrl');
-        if (currentResourceUrl) { // If it found a PDF in session storage
-             if(sessionInfoEl) sessionInfoEl.textContent = `Lectura: PDF Almacenado`;
-             cargarContenidoPDF(currentResourceUrl, 'PDF Almacenado');
-             if (youtubeInputContainer) youtubeInputContainer.style.display = 'none';
-             if (youtubeVideoPlayer) youtubeVideoPlayer.style.display = 'none';
-        } else {
-             // If no URL param, no user input yet, and no PDF in session storage,
-             // it falls back to the default state for YouTube input.
-        }
+        sessionStorage.removeItem('pdfDataUrl'); 
     }
 
-
-    if (!sesionId && !currentResourceUrl) {
-        // If neither session ID nor resource URL is passed, we are in a state where
-        // the user is expected to input a YouTube URL.
-        // The default display logic above already sets this up.
-        // No alert needed, as user is meant to provide input.
-        console.log("Esperando entrada de URL de YouTube por parte del usuario.");
-    } else if (!sesionId && currentResourceUrl) {
-        // If resource URL is present but no session ID (e.g., direct link to activity without session setup)
-        // This scenario requires a session to be created upon 'start',
-        // which is now handled by `startCamera` calling `crearNuevaSesionBackend`.
-        console.log("Recurso cargado desde URL, la sesión se creará al iniciar el monitoreo.");
-    } else if (sesionId && currentResourceUrl) {
-        // Both present, normal flow.
-        console.log("Sesión y recurso cargados desde URL.");
+    if (!sesionId || !currentResourceName) {
+        alert('Sesión no válida. Redirigiendo...');
+        window.location.href = 'seleccionar_actividad.html';
+        return;
     }
 
+    loadContent();
 });
 
-// Se eliminó la función loadContent() ya que su lógica se ha integrado en el DOMContentLoaded.
-// Si se necesita la función loadContent() para otros propósitos, debe ser re-definida.
-/*
+// ==========================================
+// 8. CARGAR CONTENIDO (PDF o YouTube)
+// ==========================================
+
 function loadContent() {
     if (isYouTubeActivity) {
         if(sessionInfoEl) sessionInfoEl.textContent = `Video: ${currentResourceName}`;
@@ -722,7 +613,6 @@ function loadContent() {
         cargarContenidoPDF(currentResourceUrl, currentResourceName);
     }
 }
-*/
 
 function getYouTubeID(url){
     var ID = '';
@@ -738,7 +628,7 @@ function getYouTubeID(url){
 }
 
 function loadYouTubeVideo(url) {
-    document.getElementById('youtubeVideoPlayer').innerHTML = '<div id="youtube-player" style="width: 100%; height: 100%; min-height: 500px;"></div>';
+    contentContainer.innerHTML = '<div id="youtube-player" style="width: 100%; height: 100%; min-height: 500px;"></div>';
 
     const videoId = getYouTubeID(url);
 
