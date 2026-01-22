@@ -72,11 +72,20 @@
 
     <div class="main-content container-fluid px-4 py-4">
         <div id="contentContainer" 
-             style="width: 100%; height: 100%; min-height: 500px; display: flex; align-items: center; justify-content: center;">
-            <p class="text-white text-center m-0">
-                <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
-                <span class="opacity-50">El contenido se cargará aquí</span>
-            </p>
+             style="width: 100%; height: 100%; min-height: 500px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+            <div id="youtubeInputContainer" class="text-center w-75 p-4 rounded" style="background: rgba(0,0,0,0.5);">
+                <h4 class="text-white mb-3">Introduce la URL del video de YouTube para tu actividad</h4>
+                <div class="input-group mb-3">
+                    <input type="text" id="youtubeUrlInput" class="form-control" placeholder="Ej: https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+                    <button class="btn btn-primary" type="button" id="loadYoutubeVideoBtn">
+                        <i class="bi bi-play-circle"></i> Reproducir
+                    </button>
+                </div>
+                <small class="text-muted">El video se reproducirá a pantalla completa en esta área.</small>
+            </div>
+            <div id="youtubeVideoPlayer" style="width: 100%; height: 100%; display: none; background-color: black;">
+                <!-- El iframe del video se cargará aquí -->
+            </div>
         </div>
     </div>
 
